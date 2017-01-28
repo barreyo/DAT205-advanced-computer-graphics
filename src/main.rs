@@ -1,13 +1,11 @@
 
 #[macro_use]
-#[cfg(feature="glutin")]
-extern crate conrod;
 extern crate gfx;
 extern crate gfx_window_glutin;
 extern crate glutin;
 
-use conrod::render;
-use conrod::text::rt;
+mod support;
+
 use gfx::traits::FactoryExt;
 use gfx::Device;
 
@@ -35,16 +33,20 @@ const TRIANGLE: [Vertex; 3] = [
 const CLEAR_COLOR: [f32; 4] = [0.1, 0.2, 0.3, 1.0];
 
 pub fn main() {
+
+    // Set up a default window
     let builder = glutin::WindowBuilder::new()
         .with_title("Triangle example".to_string())
         .with_dimensions(1024, 768)
         .with_vsync();
     let (window, mut device, mut factory, main_color, mut main_depth) =
         gfx_window_glutin::init::<ColorFormat, DepthFormat>(builder);
+    
+    // Command buffer and load shaders
     let mut encoder: gfx::Encoder<_, _> = factory.create_command_buffer().into();
     let pso = factory.create_pipeline_simple(
-        include_bytes!("shaders/basic.vert"),
-        include_bytes!("shaders/basic.frag"),
+        include_bytes!("../assets/shaders/basic.vert"),
+        include_bytes!("../assets/shaders/basic.frag"),
         pipe::new()
     ).unwrap();
     let (vertex_buffer, slice) = factory.create_vertex_buffer_with_slice(&TRIANGLE, ());
@@ -53,8 +55,15 @@ pub fn main() {
         out: main_color
     };
 
+    let mut frame_time = support::frame_clock::FrameClock::new();
+
     'main: loop {
-        // loop over events
+
+        frame_time.tick();
+        println!("Dur: {:?} ms", frame_time.get_last_frame_duration());
+        println!("FPS: {:?}", frame_time.get_fps());
+
+        // PROCESS INPUT
         for event in window.poll_events() {
             match event {
                 glutin::Event::KeyboardInput(_, _, Some(glutin::VirtualKeyCode::Escape)) |
@@ -65,6 +74,10 @@ pub fn main() {
                 _ => {},
             }
         }
+
+        // RUN UPDATE() ON ALL OBJECTS
+
+        // RENDER TO SCREEN
         // draw a frame
         encoder.clear(&data.out, CLEAR_COLOR);
         encoder.draw(&slice, &pso, &data);

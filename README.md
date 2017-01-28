@@ -10,8 +10,8 @@ can find the estimated weekly planning.
 * Deferred shading 2
 * Water 2
 * SSAO 1
-* In-engine world editor
 * Depth of field 2
+* Distance fog
 
 = 10p
 
