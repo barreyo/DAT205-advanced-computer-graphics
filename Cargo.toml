@@ -5,10 +5,13 @@ authors = ["Johan Backman <johback@student.chalmers.se>"]
 
 [dependencies]
 cgmath = "0.12"
-conrod = "0.49"
-glium = "0.16.0"
+conrod = { version = "*", features = ["glium", "winit"] }
+glium = "0.16"
 winit = "0.5.9"
-piston2d-graphics = "0.20"
 log = "0.3"
+log_buffer = "1.0"
 env_logger = "0.3"
 time = "0.1"
+find_folder = "0.3"
+image = "0.12"
+specs = "0.7"

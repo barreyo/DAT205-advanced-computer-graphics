@@ -20,7 +20,22 @@ can find the estimated weekly planning.
 * FPS Counter
 
 **W3:**
-* TODO
+* Render Sphere
+
+**W4:**
+* Render more interesting environment
+
+**W5**
+* Lighting - Port from lab in previous course
+
+**W6**
+* SSAO
+
+**W7**
+* Distance fog
+
+**W8**
+Exams
 
 # Building and running
 The project depends on __Rust__ and is buildt through __Cargo__, which is

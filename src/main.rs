@@ -1,88 +1,256 @@
-
+#[cfg(all(feature="winit", feature="glium"))]
 #[macro_use]
-extern crate gfx;
-extern crate gfx_window_glutin;
-extern crate glutin;
+extern crate conrod;
+#[macro_use]
+extern crate glium;
+extern crate specs;
 
 mod support;
 
-use gfx::traits::FactoryExt;
-use gfx::Device;
-
-pub type ColorFormat = gfx::format::Rgba8;
-pub type DepthFormat = gfx::format::DepthStencil;
-
-gfx_defines!{
-    vertex Vertex {
-        pos: [f32; 2] = "a_Pos",
-        color: [f32; 3] = "a_Color",
-    }
-
-    pipeline pipe {
-        vbuf: gfx::VertexBuffer<Vertex> = (),
-        out: gfx::RenderTarget<ColorFormat> = "Target0",
-    }
+fn main() {
+    game::main();
 }
 
-const TRIANGLE: [Vertex; 3] = [
-    Vertex { pos: [ -0.5, -0.5 ], color: [1.0, 0.0, 0.0] },
-    Vertex { pos: [  0.5, -0.5 ], color: [0.0, 1.0, 0.0] },
-    Vertex { pos: [  0.0,  0.5 ], color: [0.0, 0.0, 1.0] }
-];
+#[cfg(all(feature="winit", feature="glium"))]
+mod game {
+    use conrod;
+    use conrod::{widget, Colorable, Positionable, Widget};
+    use conrod::widget::{Rectangle, TextBox};
+    use conrod::Sizeable;
+    use conrod::Labelable;
+    use conrod::backend::glium::glium;
 
-const CLEAR_COLOR: [f32; 4] = [0.1, 0.2, 0.3, 1.0];
+    use glium::Surface;
+    use glium::index::PrimitiveType;
+    use glium::DisplayBuild;
 
-pub fn main() {
+    use support;
 
-    // Set up a default window
-    let builder = glutin::WindowBuilder::new()
-        .with_title("Triangle example".to_string())
-        .with_dimensions(1024, 768)
-        .with_vsync();
-    let (window, mut device, mut factory, main_color, mut main_depth) =
-        gfx_window_glutin::init::<ColorFormat, DepthFormat>(builder);
-    
-    // Command buffer and load shaders
-    let mut encoder: gfx::Encoder<_, _> = factory.create_command_buffer().into();
-    let pso = factory.create_pipeline_simple(
-        include_bytes!("../assets/shaders/basic.vert"),
-        include_bytes!("../assets/shaders/basic.frag"),
-        pipe::new()
-    ).unwrap();
-    let (vertex_buffer, slice) = factory.create_vertex_buffer_with_slice(&TRIANGLE, ());
-    let mut data = pipe::Data {
-        vbuf: vertex_buffer,
-        out: main_color
-    };
+    pub fn main() {
+        const WIDTH: u32 = 1200;
+        const HEIGHT: u32 = 1000;
 
-    let mut frame_time = support::frame_clock::FrameClock::new();
+        // Build the window.
+        let display = glium::glutin::WindowBuilder::new()
+            .with_vsync()
+            .with_dimensions(WIDTH, HEIGHT)
+            .with_title("Advanced Graphics")
+            .build_glium()
+            .unwrap();
 
-    'main: loop {
+        // construct our `Ui`.
+        let mut ui = conrod::UiBuilder::new([WIDTH as f64, HEIGHT as f64]).build();
 
-        frame_time.tick();
-        println!("Dur: {:?} ms", frame_time.get_last_frame_duration());
-        println!("FPS: {:?}", frame_time.get_fps());
+        // Generate the widget identifiers.
+        widget_ids!(struct Ids { canvas, bg, text, float, list, text_input });
+        let ids = Ids::new(ui.widget_id_generator());
 
-        // PROCESS INPUT
-        for event in window.poll_events() {
-            match event {
-                glutin::Event::KeyboardInput(_, _, Some(glutin::VirtualKeyCode::Escape)) |
-                glutin::Event::Closed => break 'main,
-                glutin::Event::Resized(_width, _height) => {
-                    gfx_window_glutin::update_views(&window, &mut data.out, &mut main_depth);
-                },
-                _ => {},
+        // Add a `Font` to the `Ui`'s `font::Map` from file.
+        const FONT_PATH: &'static str =
+            concat!(env!("CARGO_MANIFEST_DIR"), "/assets/fonts/noto_sans_regular.ttf");
+        ui.fonts.insert_from_file(FONT_PATH).unwrap();
+
+        // A type used for converting `conrod::render::Primitives` into `Command`s that can be used
+        // for drawing to the glium `Surface`.
+        let mut renderer = conrod::backend::glium::Renderer::new(&display).unwrap();
+
+        // The image map describing each of our widget->image mappings (in our case, none).
+        let image_map = conrod::image::Map::<glium::texture::Texture2d>::new();
+
+        // building the vertex buffer, which contains all the vertices that we will draw
+        let vertex_buffer = {
+            #[derive(Copy, Clone)]
+            struct Vertex {
+                position: [f32; 2],
+                color: [f32; 3],
             }
+
+            implement_vertex!(Vertex, position, color);
+
+            glium::VertexBuffer::new(&display,
+                &[
+                    Vertex { position: [-0.5, -0.5], color: [0.0, 1.0, 0.0] },
+                    Vertex { position: [ 0.0,  0.5], color: [0.0, 0.0, 1.0] },
+                    Vertex { position: [ 0.5, -0.5], color: [1.0, 0.0, 0.0] },
+                ]
+            ).unwrap()
+        };
+
+        // compiling shaders and linking them together
+        let program = program!(&display,
+            140 => {
+                vertex: "
+                    #version 140
+                    uniform mat4 matrix;
+                    in vec2 position;
+                    in vec3 color;
+                    out vec3 vColor;
+                    void main() {
+                        gl_Position = vec4(position, 0.0, 1.0) * matrix;
+                        vColor = color;
+                    }
+                ",
+
+                fragment: "
+                    #version 140
+                    in vec3 vColor;
+                    out vec4 f_color;
+                    void main() {
+                        f_color = vec4(vColor, 1.0);
+                    }
+                "
+            },
+
+            110 => {
+                vertex: "
+                    #version 110
+                    uniform mat4 matrix;
+                    attribute vec2 position;
+                    attribute vec3 color;
+                    varying vec3 vColor;
+                    void main() {
+                        gl_Position = vec4(position, 0.0, 1.0) * matrix;
+                        vColor = color;
+                    }
+                ",
+
+                fragment: "
+                    #version 110
+                    varying vec3 vColor;
+                    void main() {
+                        gl_FragColor = vec4(vColor, 1.0);
+                    }
+                ",
+            },
+
+            100 => {
+                vertex: "
+                    #version 100
+                    uniform lowp mat4 matrix;
+                    attribute lowp vec2 position;
+                    attribute lowp vec3 color;
+                    varying lowp vec3 vColor;
+                    void main() {
+                        gl_Position = vec4(position, 0.0, 1.0) * matrix;
+                        vColor = color;
+                    }
+                ",
+
+                fragment: "
+                    #version 100
+                    varying lowp vec3 vColor;
+                    void main() {
+                        gl_FragColor = vec4(vColor, 1.0);
+                    }
+                ",
+            },
+        ).unwrap();
+
+        // building the index buffer
+        let index_buffer = glium::IndexBuffer::new(&display,
+                                                PrimitiveType::TrianglesList,
+                                                &[0u16, 1, 2])
+                                                .unwrap();
+
+        let ref mut field_text = "Edit".to_owned();
+
+        // Poll events from the window.
+        let mut frame_time = support::frame_clock::FrameClock::new();
+        'main: loop {
+
+            frame_time.tick();
+
+            // Collect all pending events.
+            let events: Vec<_> = display.poll_events().collect();
+
+            // Handle all events.
+            for event in events {
+
+                // Use the `winit` backend feature to convert the winit event to a conrod one.
+                if let Some(event) = conrod::backend::winit::convert(event.clone(), &display) {
+                    ui.handle_event(event);
+                }
+
+                match event {
+                    // Break from the loop upon `Escape`.
+                    glium::glutin::Event::KeyboardInput(_, _, Some(glium::glutin::VirtualKeyCode::Escape)) |
+                    glium::glutin::Event::Closed =>
+                        break 'main,
+                    _ => {},
+                }
+            }
+
+            // Instantiate all widgets in the GUI.
+            {
+                let ui = &mut ui.set_widgets();
+
+                Rectangle::fill_with([90.0, 20.0], conrod::Color::Rgba(0.0, 0.0, 0.0, 0.8))
+                    .top_left_of(ui.window)
+                    .set(ids.bg, ui);
+
+                // "Hello World!" in the middle of the screen.
+                widget::Text::new(format!("{} fps ({} ms)",
+                        frame_time.get_fps(),
+                        frame_time.get_last_frame_duration()).as_str())
+                    .middle_of(ids.bg)
+                    .color(conrod::color::WHITE)
+                    .font_size(12)
+                    .set(ids.text, ui);
+
+                Rectangle::fill_with([300.0, 200.0], conrod::Color::Rgba(0.0, 0.0, 0.0, 0.8))
+                    .floating(true)
+                    .w_h(300.0, 200.0)
+                    .middle_of(ui.window)
+                    .set(ids.float, ui);
+
+                let test_args = vec!["hello".to_string(), "60".to_string(), "arg".to_string()];
+
+                let mut list = vec![true; 16];
+
+                let (mut items, scrollbar) = widget::List::new(list.len(), 20.0)
+                    .scrollbar_on_top()
+                    .middle_of(ids.float)
+                    .wh_of(ids.float)
+                    .set(ids.list, ui);
+
+                while let Some(item) = items.next(ui) {
+                    let i = item.i;
+                    let label = format!("item {}: {}", i, list[i]);
+                    let toggle = widget::Text::new(label.as_str());
+                    item.set(toggle, ui);
+
+                }
+                //if let Some(s) = scrollbar { s.set(ui) }
+
+                for edit in TextBox::new(field_text.as_str())
+                    .color(conrod::color::WHITE)
+                    .middle_of(ids.float)
+                    .set(ids.text_input, ui)
+                {
+                    match edit {
+                        widget::text_box::Event::Enter => println!("TextBox: {:?}", field_text),
+                        widget::text_box::Event::Update(string) => *field_text = string,
+                    }
+                }
+            }
+
+            // Render the `Ui` and then display it on the screen.
+            let primitives = ui.draw();
+            let uniforms = uniform! {
+                matrix: [
+                    [1.0, 0.0, 0.0, 0.0],
+                    [0.0, 1.0, 0.0, 0.0],
+                    [0.0, 0.0, 1.0, 0.0],
+                    [0.0, 0.0, 0.0, 1.0f32]
+                ]
+            };
+
+            renderer.fill(&display, primitives, &image_map);
+            let mut target = display.draw();
+            target.clear_color(0.5, 0.3, 0.7, 1.0);
+            target.draw(&vertex_buffer, &index_buffer, &program, &uniforms, &Default::default()).unwrap();
+            renderer.draw(&display, &mut target, &image_map).unwrap();
+            target.finish().unwrap();
         }
-
-        // RUN UPDATE() ON ALL OBJECTS
-
-        // RENDER TO SCREEN
-        // draw a frame
-        encoder.clear(&data.out, CLEAR_COLOR);
-        encoder.draw(&slice, &pso, &data);
-        encoder.flush(&mut device);
-        window.swap_buffers().unwrap();
-        device.cleanup();
     }
 }
