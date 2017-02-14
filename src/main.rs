@@ -5,6 +5,7 @@ extern crate conrod;
 extern crate glium;
 extern crate specs;
 
+mod ui;
 mod support;
 
 fn main() {
@@ -25,6 +26,7 @@ mod game {
     use glium::DisplayBuild;
 
     use support;
+    use ui;
 
     pub fn main() {
         const WIDTH: u32 = 1200;
@@ -42,8 +44,10 @@ mod game {
         let mut ui = conrod::UiBuilder::new([WIDTH as f64, HEIGHT as f64]).build();
 
         // Generate the widget identifiers.
-        widget_ids!(struct Ids { canvas, bg, text, float, list, text_input });
+        widget_ids!(struct Ids { canvas, bg, text, float, list, text_input});
         let ids = Ids::new(ui.widget_id_generator());
+
+        let console_ids = ui::console::ConsoleIds::new(ui.widget_id_generator());
 
         // Add a `Font` to the `Ui`'s `font::Map` from file.
         const FONT_PATH: &'static str =
@@ -152,7 +156,9 @@ mod game {
                                                 &[0u16, 1, 2])
                                                 .unwrap();
 
-        let ref mut field_text = "Edit".to_owned();
+        // let ref mut field_text = "Edit".to_owned();
+
+        let mut console = ui::console::Console::new();
 
         // Poll events from the window.
         let mut frame_time = support::frame_clock::FrameClock::new();
@@ -176,6 +182,12 @@ mod game {
                     glium::glutin::Event::KeyboardInput(_, _, Some(glium::glutin::VirtualKeyCode::Escape)) |
                     glium::glutin::Event::Closed =>
                         break 'main,
+                    glium::glutin::Event::KeyboardInput(_, _, Some(glium::glutin::VirtualKeyCode::E)) =>
+                        console.add_entry("Hello this is an ERROR. OMFG.".to_string(), ui::console::ConsoleLogLevel::ERROR),
+                    glium::glutin::Event::KeyboardInput(_, _, Some(glium::glutin::VirtualKeyCode::W)) =>
+                        console.add_entry("Hello this is a warning!".to_string(), ui::console::ConsoleLogLevel::WARNING),
+                    glium::glutin::Event::KeyboardInput(_, _, Some(glium::glutin::VirtualKeyCode::C)) =>
+                        console.toggle_visible(),
                     _ => {},
                 }
             }
@@ -197,41 +209,8 @@ mod game {
                     .font_size(12)
                     .set(ids.text, ui);
 
-                Rectangle::fill_with([300.0, 200.0], conrod::Color::Rgba(0.0, 0.0, 0.0, 0.8))
-                    .floating(true)
-                    .w_h(300.0, 200.0)
-                    .middle_of(ui.window)
-                    .set(ids.float, ui);
-
-                let test_args = vec!["hello".to_string(), "60".to_string(), "arg".to_string()];
-
-                let mut list = vec![true; 16];
-
-                let (mut items, scrollbar) = widget::List::new(list.len(), 20.0)
-                    .scrollbar_on_top()
-                    .middle_of(ids.float)
-                    .wh_of(ids.float)
-                    .set(ids.list, ui);
-
-                while let Some(item) = items.next(ui) {
-                    let i = item.i;
-                    let label = format!("item {}: {}", i, list[i]);
-                    let toggle = widget::Text::new(label.as_str());
-                    item.set(toggle, ui);
-
-                }
-                //if let Some(s) = scrollbar { s.set(ui) }
-
-                for edit in TextBox::new(field_text.as_str())
-                    .color(conrod::color::WHITE)
-                    .middle_of(ids.float)
-                    .set(ids.text_input, ui)
-                {
-                    match edit {
-                        widget::text_box::Event::Enter => println!("TextBox: {:?}", field_text),
-                        widget::text_box::Event::Update(string) => *field_text = string,
-                    }
-                }
+                // TODO: Move this to a UIRenderable component and use ECS
+                console.update(ui, &console_ids);
             }
 
             // Render the `Ui` and then display it on the screen.
