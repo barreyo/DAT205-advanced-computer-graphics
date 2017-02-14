@@ -15,10 +15,6 @@ fn main() {
 #[cfg(all(feature="winit", feature="glium"))]
 mod game {
     use conrod;
-    use conrod::{widget, Colorable, Positionable, Widget};
-    use conrod::widget::{Rectangle, TextBox};
-    use conrod::Sizeable;
-    use conrod::Labelable;
     use conrod::backend::glium::glium;
 
     use glium::Surface;
@@ -44,9 +40,7 @@ mod game {
         let mut ui = conrod::UiBuilder::new([WIDTH as f64, HEIGHT as f64]).build();
 
         // Generate the widget identifiers.
-        widget_ids!(struct Ids { canvas, bg, text, float, list, text_input});
-        let ids = Ids::new(ui.widget_id_generator());
-
+        let debug_ids = ui::debug_info::DebugIds::new(ui.widget_id_generator());
         let console_ids = ui::console::ConsoleIds::new(ui.widget_id_generator());
 
         // Add a `Font` to the `Ui`'s `font::Map` from file.
@@ -159,6 +153,7 @@ mod game {
         // let ref mut field_text = "Edit".to_owned();
 
         let mut console = ui::console::Console::new();
+        let debug_info  = ui::debug_info::DebugInfo::new();
 
         // Poll events from the window.
         let mut frame_time = support::frame_clock::FrameClock::new();
@@ -182,11 +177,11 @@ mod game {
                     glium::glutin::Event::KeyboardInput(_, _, Some(glium::glutin::VirtualKeyCode::Escape)) |
                     glium::glutin::Event::Closed =>
                         break 'main,
-                    glium::glutin::Event::KeyboardInput(_, _, Some(glium::glutin::VirtualKeyCode::E)) =>
+                    glium::glutin::Event::KeyboardInput(glium::glutin::ElementState::Released, _, Some(glium::glutin::VirtualKeyCode::Key1)) =>
                         console.add_entry("Hello this is an ERROR. OMFG.".to_string(), ui::console::ConsoleLogLevel::ERROR),
-                    glium::glutin::Event::KeyboardInput(_, _, Some(glium::glutin::VirtualKeyCode::W)) =>
+                    glium::glutin::Event::KeyboardInput(glium::glutin::ElementState::Released, _, Some(glium::glutin::VirtualKeyCode::Key2)) =>
                         console.add_entry("Hello this is a warning!".to_string(), ui::console::ConsoleLogLevel::WARNING),
-                    glium::glutin::Event::KeyboardInput(_, _, Some(glium::glutin::VirtualKeyCode::C)) =>
+                    glium::glutin::Event::KeyboardInput(glium::glutin::ElementState::Released, _, Some(glium::glutin::VirtualKeyCode::Key9)) =>
                         console.toggle_visible(),
                     _ => {},
                 }
@@ -196,19 +191,10 @@ mod game {
             {
                 let ui = &mut ui.set_widgets();
 
-                Rectangle::fill_with([90.0, 20.0], conrod::Color::Rgba(0.0, 0.0, 0.0, 0.8))
-                    .top_left_of(ui.window)
-                    .set(ids.bg, ui);
-
-                // "Hello World!" in the middle of the screen.
-                widget::Text::new(format!("{} fps ({} ms)",
-                        frame_time.get_fps(),
-                        frame_time.get_last_frame_duration()).as_str())
-                    .middle_of(ids.bg)
-                    .color(conrod::color::WHITE)
-                    .font_size(12)
-                    .set(ids.text, ui);
-
+                debug_info.update(ui,
+                                  &debug_ids,
+                                  frame_time.get_fps(),
+                                  frame_time.get_last_frame_duration());
                 // TODO: Move this to a UIRenderable component and use ECS
                 console.update(ui, &console_ids);
             }
