@@ -1,7 +1,9 @@
 
-extern crate conrod;
-
 use std::collections::VecDeque;
+use conrod;
+use alewife;
+
+use core::event;
 
 widget_ids!{
     pub struct ConsoleIds {
@@ -12,7 +14,7 @@ widget_ids!{
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub enum ConsoleLogLevel {
     INFO,
     WARNING,
@@ -22,9 +24,9 @@ pub enum ConsoleLogLevel {
 impl ConsoleLogLevel {
     fn value(&self) -> conrod::Color {
         match *self {
-            ConsoleLogLevel::INFO => conrod::Color::Rgba(0.925, 0.941, 0.943, 1.0),
-            ConsoleLogLevel::WARNING => conrod::Color::Rgba(0.943, 0.768, 0.059,1.0),
-            ConsoleLogLevel::ERROR => conrod::Color::Rgba(0.905, 0.298, 0.235,1.0),
+            ConsoleLogLevel::INFO    => conrod::Color::Rgba(0.925, 0.941, 0.943, 1.0),
+            ConsoleLogLevel::WARNING => conrod::Color::Rgba(0.943, 0.768, 0.059, 1.0),
+            ConsoleLogLevel::ERROR   => conrod::Color::Rgba(0.905, 0.298, 0.235, 1.0),
         }
     }
 }
@@ -35,27 +37,33 @@ pub struct ConsoleEntry {
     level: ConsoleLogLevel,
 }
 
-#[derive(Debug)]
 pub struct Console {
     buffer: VecDeque<ConsoleEntry>,
     text_field_buffer: String,
+    publisher: alewife::Publisher<event::EventID, event::Event>,
+    event_queue: alewife::Subscriber<event::EventID, event::Event>,
     window_w: f64,
     window_h: f64,
     window_x: f64,
     window_y: f64,
+    font_size: u32,
     visible: bool,
 }
 
 impl Console {
-    pub fn new() -> Console {
+    pub fn new(publisher: alewife::Publisher<event::EventID, event::Event>,
+               e_que: alewife::Subscriber<event::EventID, event::Event>) -> Console {
         Console {
             // TODO: Replace this with logger, use same buffer lol
             buffer: VecDeque::with_capacity(100),
-            text_field_buffer: "Input".to_string(),
+            text_field_buffer: "".to_string(),
+            publisher: publisher,
+            event_queue: e_que,
             window_w: 600.0,
             window_h: 400.0,
             window_x: 100.0,
             window_y: 100.0,
+            font_size: 11,
             visible: true
         }
     }
@@ -81,6 +89,28 @@ impl Console {
         use conrod::Labelable;
         use conrod::Sizeable;
 
+        use core::event;
+
+        let events: Vec<_> = self.event_queue.fetch();
+
+        // No need to do this shit, since logger redirects to console.
+        // Only first match is required.
+        for event in events {
+            match event {
+                (_, event::Event::ConsoleMessage(msg, level)) => self.add_entry(msg, level),
+                (_, event::Event::ReloadShaders)              => self.add_entry("Reloading shaders...".to_owned(), ConsoleLogLevel::INFO),
+                (_, event::Event::ToggleWireframe)            => self.add_entry("Toggled wireframe mode...".to_owned(), ConsoleLogLevel::INFO),
+                (_, event::Event::SetWindowSize(w, h))        => self.add_entry(format!("Setting window size to w: {} h: {}", w, h), ConsoleLogLevel::INFO),
+                (_, event::Event::ToggleFullscreen)           => self.add_entry("Toggle Fullscreen".to_owned(), ConsoleLogLevel::INFO),
+                (_, event::Event::ToggleVSync)                => self.add_entry("Toggle Vertical Sync".to_owned(), ConsoleLogLevel::INFO),
+                (_, event::Event::MoveCamera(x, y))           => self.add_entry(format!("Moved Camera to x: {} y: {}", x, y), ConsoleLogLevel::INFO),
+                (_, event::Event::ToggleConsole)              => {
+                    self.add_entry("INFO: Toggle console visibility".to_owned(), ConsoleLogLevel::INFO);
+                    self.toggle_visible();
+                },
+            }
+        }
+
         // Do not draw anything if not shown
         if !self.visible {
             return
@@ -103,7 +133,7 @@ impl Console {
             .set(ids.bg, ui);
 
         // Create the list of entries in the console log.
-        let (mut items, scrollbar) = widget::List::new(self.buffer.len(), 20.0)
+        let (mut items, scrollbar) = widget::List::new(self.buffer.len(), self.font_size * 1.5)
             .scrollbar_on_top()
             .middle_of(ids.bg)
             .w_h(self.window_w - 10.0, self.window_h - 30.0)
@@ -114,6 +144,7 @@ impl Console {
             if let Some(ev) = self.buffer.get(i as usize) {
                 let label = format!("{}", ev.text);
                 let e_string = widget::Text::new(label.as_str())
+                                    .font_size(self.font_size)
                                     .color(ev.level.value());
                 item.set(e_string, ui);
             }

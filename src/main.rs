@@ -5,8 +5,16 @@ extern crate conrod;
 extern crate glium;
 extern crate specs;
 
-mod ui;
+#[macro_use]
+extern crate log;
+
+extern crate alewife;
+
+mod core;
+// mod input;
+mod rendering;
 mod support;
+mod ui;
 
 fn main() {
     game::main();
@@ -21,6 +29,10 @@ mod game {
     use glium::index::PrimitiveType;
     use glium::DisplayBuild;
 
+    use log;
+    use alewife;
+
+    use core::event;
     use support;
     use ui;
 
@@ -28,15 +40,31 @@ mod game {
         const WIDTH: u32 = 1200;
         const HEIGHT: u32 = 1000;
 
+        // Setup the message bus for core systems
+        let mut bus = alewife::Publisher::<event::EventID, event::Event>::new();
+
+        let console_sub = bus.add_subscriber(&[event::EventID::UIEvent,
+                                               event::EventID::RenderEvent,
+                                               event::EventID::WindowEvent,
+                                               event::EventID::EntityEvent]);
+
+        // Once we have built the message bus we can clone it to all
+        // modules that wanna publish to it.
+        let publisher = bus.build();
+
+        let logger = support::logging::LogBuilder::new()
+            .publisher(publisher.clone())
+            .init();
+
         // Build the window.
         let display = glium::glutin::WindowBuilder::new()
             .with_vsync()
             .with_dimensions(WIDTH, HEIGHT)
-            .with_title("Advanced Graphics")
+            .with_title("TDA361 Advanced Graphics")
             .build_glium()
             .unwrap();
 
-        // construct our `Ui`.
+        // Construct our `Ui`.
         let mut ui = conrod::UiBuilder::new([WIDTH as f64, HEIGHT as f64]).build();
 
         // Generate the widget identifiers.
@@ -55,7 +83,7 @@ mod game {
         // The image map describing each of our widget->image mappings (in our case, none).
         let image_map = conrod::image::Map::<glium::texture::Texture2d>::new();
 
-        // building the vertex buffer, which contains all the vertices that we will draw
+        // Building the vertex buffer, which contains all the vertices that we will draw
         let vertex_buffer = {
             #[derive(Copy, Clone)]
             struct Vertex {
@@ -150,9 +178,7 @@ mod game {
                                                 &[0u16, 1, 2])
                                                 .unwrap();
 
-        // let ref mut field_text = "Edit".to_owned();
-
-        let mut console = ui::console::Console::new();
+        let mut console = ui::console::Console::new(publisher.clone(), console_sub);
         let debug_info  = ui::debug_info::DebugInfo::new();
 
         // Poll events from the window.
@@ -177,12 +203,15 @@ mod game {
                     glium::glutin::Event::KeyboardInput(_, _, Some(glium::glutin::VirtualKeyCode::Escape)) |
                     glium::glutin::Event::Closed =>
                         break 'main,
-                    glium::glutin::Event::KeyboardInput(glium::glutin::ElementState::Released, _, Some(glium::glutin::VirtualKeyCode::Key1)) =>
-                        console.add_entry("Hello this is an ERROR. OMFG.".to_string(), ui::console::ConsoleLogLevel::ERROR),
-                    glium::glutin::Event::KeyboardInput(glium::glutin::ElementState::Released, _, Some(glium::glutin::VirtualKeyCode::Key2)) =>
-                        console.add_entry("Hello this is a warning!".to_string(), ui::console::ConsoleLogLevel::WARNING),
-                    glium::glutin::Event::KeyboardInput(glium::glutin::ElementState::Released, _, Some(glium::glutin::VirtualKeyCode::Key9)) =>
-                        console.toggle_visible(),
+                    glium::glutin::Event::KeyboardInput(glium::glutin::ElementState::Released, _, Some(glium::glutin::VirtualKeyCode::Key1)) => {
+                        error!("Error logged!");
+                    },
+                    glium::glutin::Event::KeyboardInput(glium::glutin::ElementState::Released, _, Some(glium::glutin::VirtualKeyCode::Key2)) => {
+                        warn!("Warning logged!");
+                    },
+                    glium::glutin::Event::KeyboardInput(glium::glutin::ElementState::Released, _, Some(glium::glutin::VirtualKeyCode::Key9)) => {
+                        publisher.publish(event::EventID::UIEvent, event::Event::ToggleConsole);
+                    },
                     _ => {},
                 }
             }
