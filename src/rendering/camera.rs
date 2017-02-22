@@ -5,7 +5,7 @@ extern crate cgmath;
 use cgmath::{vector, matrix, projection};
 
 #[derive(Debug)]
-pub struct PerspectiveParams {
+pub struct Perspective {
     fov:            f32,
     aspect_ratio:   f32,
     near:           f32,

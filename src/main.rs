@@ -6,6 +6,10 @@ extern crate glium;
 extern crate specs;
 
 #[macro_use]
+extern crate lazy_static;
+extern crate find_folder;
+
+#[macro_use]
 extern crate log;
 
 extern crate alewife;
@@ -29,7 +33,6 @@ mod game {
     use glium::index::PrimitiveType;
     use glium::DisplayBuild;
 
-    use log;
     use alewife;
 
     use core::event;
@@ -204,7 +207,8 @@ mod game {
                     glium::glutin::Event::Closed =>
                         break 'main,
                     glium::glutin::Event::KeyboardInput(glium::glutin::ElementState::Released, _, Some(glium::glutin::VirtualKeyCode::Key1)) => {
-                        error!("Error logged!");
+                        glium::glutin::WindowBuilder::new().with_fullscreen(glium::glutin::get_primary_monitor())
+                                                    .rebuild_glium(&display).unwrap();
                     },
                     glium::glutin::Event::KeyboardInput(glium::glutin::ElementState::Released, _, Some(glium::glutin::VirtualKeyCode::Key2)) => {
                         warn!("Warning logged!");

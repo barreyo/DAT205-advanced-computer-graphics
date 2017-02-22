@@ -3,10 +3,10 @@ use ui::console::ConsoleLogLevel;
 
 #[derive(Debug, Hash, PartialEq, Eq, Clone, Copy)]
 pub enum EventID {
-    RenderEvent = 0,
-    WindowEvent = 1,
-    EntityEvent = 2,
-    UIEvent     = 3,
+    RenderEvent,
+    WindowEvent,
+    EntityEvent,
+    UIEvent,
 }
 
 #[derive(Clone, Debug)]
@@ -19,7 +19,7 @@ pub enum Event {
 
     // * --- WindowEvent
     // Resize the window
-    SetWindowSize(u32, u32),
+    SetWindowSize(u32, u32), // USE LIST FOR ARGUMENTS? ONLY INTS?
     // Toggle fullscreen
     ToggleFullscreen,
     // VSync

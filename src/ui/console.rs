@@ -1,9 +1,12 @@
 
 use std::collections::VecDeque;
+use std::collections::HashMap;
+
 use conrod;
 use alewife;
 
 use core::event;
+use rendering::colors;
 
 widget_ids!{
     pub struct ConsoleIds {
@@ -24,11 +27,27 @@ pub enum ConsoleLogLevel {
 impl ConsoleLogLevel {
     fn value(&self) -> conrod::Color {
         match *self {
-            ConsoleLogLevel::INFO    => conrod::Color::Rgba(0.925, 0.941, 0.943, 1.0),
-            ConsoleLogLevel::WARNING => conrod::Color::Rgba(0.943, 0.768, 0.059, 1.0),
-            ConsoleLogLevel::ERROR   => conrod::Color::Rgba(0.905, 0.298, 0.235, 1.0),
+            ConsoleLogLevel::INFO    => {
+                colors::WHITE.to_conrod_color()
+            },
+            ConsoleLogLevel::WARNING => {
+                colors::LIGHT_YELLOW.to_conrod_color()
+            },
+            ConsoleLogLevel::ERROR   => {
+                colors::LIGHT_RED.to_conrod_color()
+            },
         }
     }
+}
+
+lazy_static! {
+    static ref BULTIN_COMMANDS: HashMap<&'static str, (event::EventID, event::Event)> = {
+        let mut m = HashMap::new();
+        m.insert("reload", (event::EventID::RenderEvent, event::Event::ReloadShaders));
+        m.insert("wireframe", (event::EventID::RenderEvent, event::Event::ToggleWireframe));
+        m.insert("close", (event::EventID::UIEvent ,event::Event::ToggleConsole));
+        m
+    };
 }
 
 #[derive(Debug)]
@@ -54,15 +73,14 @@ impl Console {
     pub fn new(publisher: alewife::Publisher<event::EventID, event::Event>,
                e_que: alewife::Subscriber<event::EventID, event::Event>) -> Console {
         Console {
-            // TODO: Replace this with logger, use same buffer lol
             buffer: VecDeque::with_capacity(100),
             text_field_buffer: "".to_string(),
             publisher: publisher,
             event_queue: e_que,
             window_w: 600.0,
             window_h: 400.0,
-            window_x: 100.0,
-            window_y: 100.0,
+            window_x: 200.0,
+            window_y: 200.0,
             font_size: 11,
             visible: true
         }
@@ -80,13 +98,22 @@ impl Console {
         self.buffer.push_front(new_entry);
     }
 
+    fn process_command(&mut self, cmd: &str) {
+        match BULTIN_COMMANDS.get(cmd) {
+            Some(&(id, ref evt)) => self.publisher.publish(id, evt.clone()),
+            None => self.add_entry(
+                "Command not found: ".to_owned() + cmd,
+                ConsoleLogLevel::WARNING),
+        }
+    }
+
     pub fn update(&mut self, ui: &mut conrod::UiCell, ids: &ConsoleIds) {
 
         use conrod;
         use conrod::{widget, Colorable, Positionable, Widget};
         use conrod::widget::Rectangle;
         use conrod::widget::TextBox;
-        use conrod::Labelable;
+        // use conrod::Labelable;
         use conrod::Sizeable;
 
         use core::event;
@@ -116,7 +143,7 @@ impl Console {
             return
         }
 
-        let floating = widget::Canvas::new()
+        /*let floating = widget::Canvas::new()
             .floating(true)
             .w_h(self.window_w, self.window_h)
             .label_color(conrod::color::WHITE);
@@ -125,18 +152,18 @@ impl Console {
             .title_bar("Console")
             .color(conrod::color::CHARCOAL)
             .set(ids.container, ui);
-
+        */
         // Create background of the console window
         Rectangle::fill_with([300.0, 200.0], conrod::Color::Rgba(0.0, 0.0, 0.0, 0.8))
-            .w_h(self.window_w, self.window_h - 26.0)
-            .mid_bottom_of(ids.container)
+            .w_h(self.window_w, self.window_h)
+            .x_y(self.window_x, self.window_y)
             .set(ids.bg, ui);
 
         // Create the list of entries in the console log.
-        let (mut items, scrollbar) = widget::List::new(self.buffer.len(), self.font_size * 1.5)
+        let (mut items, scrollbar) = widget::List::new(self.buffer.len(), 15.0)
             .scrollbar_on_top()
             .middle_of(ids.bg)
-            .w_h(self.window_w - 10.0, self.window_h - 30.0)
+            .w_h(self.window_w - 10.0, self.window_h - 10.0)
             .set(ids.log, ui);
 
         while let Some(item) = items.next(ui) {
@@ -158,13 +185,16 @@ impl Console {
         // Update and draw the input windows
         for edit in TextBox::new(title.as_str())
             .w_h(self.window_w, 30.0)
-            .down_from(ids.container, 1.0)
+            .font_size(12)
+            .down_from(ids.bg, 1.0)
             .set(ids.input, ui)
         {
             match edit {
                 widget::text_box::Event::Enter => {
                     let current_str = self.text_field_buffer.clone().to_owned();
-                    self.add_entry(current_str, ConsoleLogLevel::INFO);
+                    if current_str != "" {
+                        self.process_command(&current_str.to_owned());
+                    }
                     self.text_field_buffer = "".to_string();
                 },
                 widget::text_box::Event::Update(string) => {

@@ -4,7 +4,6 @@ extern crate log;
 
 use core::event;
 
-use log::max_log_level;
 use log::{LogRecord, LogLevel, LogMetadata, SetLoggerError, LogLevelFilter};
 
 pub struct LogBuilder {
@@ -38,7 +37,7 @@ impl LogBuilder {
     }
 }
 
-struct Logger {
+pub struct Logger {
     publisher: Option<alewife::Publisher<event::EventID, event::Event>>,
 }
 
