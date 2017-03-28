@@ -16,10 +16,12 @@ pub enum Event {
     ReloadShaders,
     // Toggle wireframe mode
     ToggleWireframe,
+    // Clear color
+    SetClearColor(f32, f32, f32),
 
     // * --- WindowEvent
     // Resize the window
-    SetWindowSize(u32, u32), // USE LIST FOR ARGUMENTS? ONLY INTS?
+    SetWindowSize(f32, f32),
     // Toggle fullscreen
     ToggleFullscreen,
     // VSync
@@ -27,12 +29,12 @@ pub enum Event {
 
     // * --- EntityEvent
     // Instantly move camera to position
-    MoveCamera(f32, f32),
+    SetCameraPos(f32, f32),
+    MoveCamera(bool, bool, bool, bool),
 
     // * --- UIEvent
     // Show message in console
     ConsoleMessage(String, ConsoleLogLevel),
-
     // Toggle display of console
     ToggleConsole,
 }

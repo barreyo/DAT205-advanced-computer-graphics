@@ -1,5 +1,8 @@
 
+#[macro_use()]
 extern crate conrod;
+
+use na::Point3;
 
 /// Macro used to generate the ids
 widget_ids! {
@@ -22,7 +25,8 @@ impl DebugInfo {
         }
     }
 
-    pub fn update(&self, ui: &mut conrod::UiCell, ids: &DebugIds, fps : u64, ms : u64) {
+    pub fn update(&self, ui: &mut conrod::UiCell, ids: &DebugIds,
+                  fps: u64, ms: u64, cam_pos: Point3<f32>) {
 
         use conrod;
         use conrod::widget;
@@ -35,11 +39,12 @@ impl DebugInfo {
             return
         }
 
-        Rectangle::fill_with([90.0, 20.0], conrod::Color::Rgba(0.0, 0.0, 0.0, 0.8))
+        Rectangle::fill_with([100.0, 40.0], conrod::Color::Rgba(0.0, 0.0, 0.0, 0.8))
             .top_left_of(ui.window)
             .set(ids.bg, ui);
 
-        widget::Text::new(format!("{} fps ({} ms)", fps, ms).as_str())
+        widget::Text::new(format!("{} fps ({} ms)\nx: {:.2} y: {:.2} z: {:.2}", fps, ms,
+                                  cam_pos.x, cam_pos.y, cam_pos.z).as_str())
             .middle_of(ids.bg)
             .color(conrod::color::WHITE)
             .font_size(12)

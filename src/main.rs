@@ -12,6 +12,9 @@ extern crate find_folder;
 #[macro_use]
 extern crate log;
 
+extern crate approx; // For the macro relative_eq!
+extern crate nalgebra as na;
+
 extern crate alewife;
 
 mod core;
@@ -38,6 +41,10 @@ mod game {
     use core::event;
     use support;
     use ui;
+    use rendering;
+
+    use na::{Matrix4, Point3};
+    use std::ops::Mul;
 
     pub fn main() {
         const WIDTH: u32 = 1200;
@@ -51,12 +58,20 @@ mod game {
                                                event::EventID::WindowEvent,
                                                event::EventID::EntityEvent]);
 
+        let cam_sub = bus.add_subscriber(&[event::EventID::EntityEvent]);
+
         // Once we have built the message bus we can clone it to all
         // modules that wanna publish to it.
         let publisher = bus.build();
 
+        let mut cam = rendering::camera::Camera::new(1.7,
+                                                     HEIGHT as f32 / WIDTH as f32,
+                                                     Point3::new(0.0, -3.0, 0.0),
+                                                     cam_sub);
+        cam.look_at(Point3::new(1.0, 1.0, 1.0), Point3::new(0.0, 0.0, 0.0));
+
         let logger = support::logging::LogBuilder::new()
-            .publisher(publisher.clone())
+            .with_publisher(publisher.clone())
             .init();
 
         // Build the window.
@@ -110,12 +125,12 @@ mod game {
             140 => {
                 vertex: "
                     #version 140
-                    uniform mat4 matrix;
                     in vec2 position;
                     in vec3 color;
                     out vec3 vColor;
+                    uniform mat4 modelViewProjMatrix;
                     void main() {
-                        gl_Position = vec4(position, 0.0, 1.0) * matrix;
+                        gl_Position = modelViewProjMatrix * vec4(position, 0.0, 1.0);
                         vColor = color;
                     }
                 ",
@@ -133,12 +148,12 @@ mod game {
             110 => {
                 vertex: "
                     #version 110
-                    uniform mat4 matrix;
+                    uniform mat4 modelViewProjMatrix;
                     attribute vec2 position;
                     attribute vec3 color;
                     varying vec3 vColor;
                     void main() {
-                        gl_Position = vec4(position, 0.0, 1.0) * matrix;
+                        gl_Position = vec4(position, 0.0, 1.0) * modelViewProjMatrix;
                         vColor = color;
                     }
                 ",
@@ -191,7 +206,7 @@ mod game {
             frame_time.tick();
 
             // Collect all pending events.
-            let events: Vec<_> = display.poll_events().collect();
+            let ref events: Vec<_> = display.poll_events().collect();
 
             // Handle all events.
             for event in events {
@@ -201,19 +216,18 @@ mod game {
                     ui.handle_event(event);
                 }
 
-                match event {
+                match *event {
                     // Break from the loop upon `Escape`.
-                    glium::glutin::Event::KeyboardInput(_, _, Some(glium::glutin::VirtualKeyCode::Escape)) |
-                    glium::glutin::Event::Closed =>
+                    glium::glutin::Event::KeyboardInput(_, _, Some(glium::glutin::VirtualKeyCode::Escape)) | glium::glutin::Event::Closed =>
                         break 'main,
-                    glium::glutin::Event::KeyboardInput(glium::glutin::ElementState::Released, _, Some(glium::glutin::VirtualKeyCode::Key1)) => {
+                    glium::glutin::Event::KeyboardInput(glium::glutin::ElementState::Released, _, Some(glium::glutin::VirtualKeyCode::Key0)) => {
                         glium::glutin::WindowBuilder::new().with_fullscreen(glium::glutin::get_primary_monitor())
                                                     .rebuild_glium(&display).unwrap();
                     },
                     glium::glutin::Event::KeyboardInput(glium::glutin::ElementState::Released, _, Some(glium::glutin::VirtualKeyCode::Key2)) => {
                         warn!("Warning logged!");
                     },
-                    glium::glutin::Event::KeyboardInput(glium::glutin::ElementState::Released, _, Some(glium::glutin::VirtualKeyCode::Key9)) => {
+                    glium::glutin::Event::KeyboardInput(glium::glutin::ElementState::Released, _, Some(glium::glutin::VirtualKeyCode::Comma)) => {
                         publisher.publish(event::EventID::UIEvent, event::Event::ToggleConsole);
                     },
                     _ => {},
@@ -227,20 +241,24 @@ mod game {
                 debug_info.update(ui,
                                   &debug_ids,
                                   frame_time.get_fps(),
-                                  frame_time.get_last_frame_duration());
+                                  frame_time.get_last_frame_duration(),
+                                  cam.get_eye());
                 // TODO: Move this to a UIRenderable component and use ECS
                 console.update(ui, &console_ids);
             }
 
+            cam.update(&events);
+            let model_matrix = Matrix4::new(1.0, 0.0, 0.0, 0.0,
+                                            0.0, 1.0, 0.0, 0.0,
+                                            0.0, 0.0, 1.0, 0.0,
+                                            0.0, 0.0, 0.0, 1.0);
+
             // Render the `Ui` and then display it on the screen.
             let primitives = ui.draw();
+
+            let mvp: [[f32; 4]; 4] = (cam.get_view_proj() * model_matrix).into();
             let uniforms = uniform! {
-                matrix: [
-                    [1.0, 0.0, 0.0, 0.0],
-                    [0.0, 1.0, 0.0, 0.0],
-                    [0.0, 0.0, 1.0, 0.0],
-                    [0.0, 0.0, 0.0, 1.0f32]
-                ]
+                modelViewProjMatrix: mvp
             };
 
             renderer.fill(&display, primitives, &image_map);

@@ -46,6 +46,7 @@ lazy_static! {
         m.insert("reload", (event::EventID::RenderEvent, event::Event::ReloadShaders));
         m.insert("wireframe", (event::EventID::RenderEvent, event::Event::ToggleWireframe));
         m.insert("close", (event::EventID::UIEvent ,event::Event::ToggleConsole));
+       // m.insert("moveCam", (event::EventID::EntityEvent, event::Event::MoveCamera(0f32, 0f32))):
         m
     };
 }
@@ -57,16 +58,16 @@ pub struct ConsoleEntry {
 }
 
 pub struct Console {
-    buffer: VecDeque<ConsoleEntry>,
-    text_field_buffer: String,
-    publisher: alewife::Publisher<event::EventID, event::Event>,
-    event_queue: alewife::Subscriber<event::EventID, event::Event>,
-    window_w: f64,
-    window_h: f64,
-    window_x: f64,
-    window_y: f64,
-    font_size: u32,
-    visible: bool,
+    buffer:             VecDeque<ConsoleEntry>,
+    text_field_buffer:  String,
+    publisher:          alewife::Publisher<event::EventID, event::Event>,
+    event_queue:        alewife::Subscriber<event::EventID, event::Event>,
+    window_w:           f64,
+    window_h:           f64,
+    window_x:           f64,
+    window_y:           f64,
+    font_size:          u32,
+    visible:            bool,
 }
 
 impl Console {
@@ -122,6 +123,7 @@ impl Console {
 
         // No need to do this shit, since logger redirects to console.
         // Only first match is required.
+        // TODO: Formatting, < 80 dude
         for event in events {
             match event {
                 (_, event::Event::ConsoleMessage(msg, level)) => self.add_entry(msg, level),
@@ -130,10 +132,13 @@ impl Console {
                 (_, event::Event::SetWindowSize(w, h))        => self.add_entry(format!("Setting window size to w: {} h: {}", w, h), ConsoleLogLevel::INFO),
                 (_, event::Event::ToggleFullscreen)           => self.add_entry("Toggle Fullscreen".to_owned(), ConsoleLogLevel::INFO),
                 (_, event::Event::ToggleVSync)                => self.add_entry("Toggle Vertical Sync".to_owned(), ConsoleLogLevel::INFO),
-                (_, event::Event::MoveCamera(x, y))           => self.add_entry(format!("Moved Camera to x: {} y: {}", x, y), ConsoleLogLevel::INFO),
+                (_, event::Event::SetCameraPos(x, y))         => self.add_entry(format!("Moved Camera to x: {} y: {}", x, y), ConsoleLogLevel::INFO),
                 (_, event::Event::ToggleConsole)              => {
                     self.add_entry("INFO: Toggle console visibility".to_owned(), ConsoleLogLevel::INFO);
                     self.toggle_visible();
+                },
+                (_, evt)                                      => {
+                    self.add_entry(format!("INFO: {:?}", evt), ConsoleLogLevel::INFO);
                 },
             }
         }
@@ -143,6 +148,7 @@ impl Console {
             return
         }
 
+        // Canvas or to not Canvas? that is the question
         /*let floating = widget::Canvas::new()
             .floating(true)
             .w_h(self.window_w, self.window_h)

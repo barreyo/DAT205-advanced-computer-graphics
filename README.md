@@ -42,5 +42,5 @@ The project depends on __Rust__ and is buildt through __Cargo__, which is
 bundled with the rust compiler.
 
 ```
-cargo run --release
+make run
 ```

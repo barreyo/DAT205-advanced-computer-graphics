@@ -17,7 +17,7 @@ impl LogBuilder {
         }
     }
 
-    pub fn publisher(&mut self, p: alewife::Publisher<event::EventID, event::Event>) -> &mut Self {
+    pub fn with_publisher(&mut self, p: alewife::Publisher<event::EventID, event::Event>) -> &mut Self {
         self.publisher = Some(p);
         self
     }

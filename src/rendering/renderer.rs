@@ -1,21 +1,18 @@
 
+use rendering::camera::Camera;
+use rendering::colors::Color;
 
+#[derive(Debug, Clone)]
 pub enum RenderMode {
     WIREFRAME,
     DEFAULT,
 }
 
-#[derive(Debug)]
 struct Renderer {
-    camera: &'static Camera,
-    clear_color: Color,
-    passes: Vec<RenderPass>,
-    mode: RenderMode,
+    camera:         &'static Camera,
+    clear_color:    Color,
+    // passes:    Vec<RenderPass>,
+    mode:           RenderMode,
 }
 
-struct RendererBuilder {
-    camera: &Camera,
-    clear_color: Color,
-    mode: RenderMode,
 
-}

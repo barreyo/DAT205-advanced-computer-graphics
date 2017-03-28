@@ -30,7 +30,7 @@ mod core {
         let renderer_sub = bus.add_subscriber(&[event::EventID::RenderEvent]);
 
         // TODO: Create a REDO module, sub to some events and save them in buffer
-        //       WHen invoked perform events in reverse. Events need to send state.
+        //       When invoked perform events in reverse. Events need to send state.
         //       CMD-z -> sends message to module to perform step.
 
         // Once we have built the message bus we can clone it to all
@@ -38,7 +38,7 @@ mod core {
         let publisher = bus.build();
 
         let logger = support::logging::LogBuilder::new()
-            .publisher(publisher.clone())
+            .with_publisher(publisher.clone())
             .init();
 
         // Build the window.
@@ -70,6 +70,7 @@ mod core {
         // The image map describing each of our widget->image mappings (in our case, none).
         let image_map = conrod::image::Map::<glium::texture::Texture2d>::new();
 
+        // Instiate the our GUI elements
         let mut console = ui::console::Console::new(publisher.clone(), console_sub);
         let debug_info  = ui::debug_info::DebugInfo::new();
     }
