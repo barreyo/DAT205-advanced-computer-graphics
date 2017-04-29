@@ -153,7 +153,7 @@ impl Camera {
         let mut right           = false;
         let mut up              = false;
         let mut down            = false;
-        let mut rotate_button   = false;
+        let mut rotate_button   = true;
 
         for event in events {
             match event {

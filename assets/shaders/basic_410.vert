@@ -1,4 +1,4 @@
-#version 150 core
+#version 410 core
 
 in vec2 a_Pos;
 in vec3 a_Color;

@@ -37,6 +37,11 @@ can find the estimated weekly planning.
 **W8**
 Exams
 
+# OS X GLSL versions
+3.30
+4.10
+[https://developer.apple.com/opengl/capabilities/]
+
 # Building and running
 The project depends on __Rust__ and is buildt through __Cargo__, which is
 bundled with the rust compiler.
