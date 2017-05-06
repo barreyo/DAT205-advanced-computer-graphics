@@ -11,6 +11,7 @@ pub mod core {
     use gfx::traits::FactoryExt;
     use conrod::render;
     use conrod::text::rt;
+    use na::{Matrix4, Point3};
 
     use alewife;
     use find_folder;
@@ -18,6 +19,7 @@ pub mod core {
     use core::event;
     use support;
     use ui;
+    use rendering;
 
     const DEFAULT_WINDOW_WIDTH: u32 = 1200;
     const DEFAULT_WINDOW_HEIGHT: u32 = 1000;
@@ -167,6 +169,7 @@ pub mod core {
                                                event::EventID::WindowEvent,
                                                event::EventID::EntityEvent]);
         let renderer_sub = bus.add_subscriber(&[event::EventID::RenderEvent]);
+        let cam_sub = bus.add_subscriber(&[event::EventID::EntityEvent]);
 
         // TODO: Create a REDO module, sub to some events and save them in buffer
         //       When invoked perform events in reverse. Events need to send state.
@@ -175,6 +178,12 @@ pub mod core {
         // Once we have built the message bus we can clone it to all
         // modules that wanna publish to it.
         let publisher = bus.build();
+
+        let mut cam = rendering::camera::Camera::new(1.7,
+                                                     DEFAULT_WINDOW_HEIGHT as f32 / DEFAULT_WINDOW_WIDTH as f32,
+                                                     Point3::new(0.0, -3.0, 0.0),
+                                                     cam_sub);
+        cam.look_at(Point3::new(1.0, 1.0, 1.0), Point3::new(0.0, 0.0, 0.0));
 
         let logger = support::logging::LogBuilder::new()
             .with_publisher(publisher.clone())
@@ -188,7 +197,7 @@ pub mod core {
         // Initialize gfx things
         let (window, mut device, mut factory, main_color, _) =
             gfx_window_glutin::init::<ColorFormat, DepthFormat>(builder);
-        //let mut encoder: gfx::Encoder<_, _> = factory.create_command_buffer().into();
+        let mut encoder: gfx::Encoder<_, _> = factory.create_command_buffer().into();
 
         // Create texture sampler
         let sampler_info = texture::SamplerInfo::new(texture::FilterMethod::Bilinear,
@@ -214,6 +223,10 @@ pub mod core {
                                              DEFAULT_WINDOW_HEIGHT as f64])
             .build();
 
+        // Generate the widget identifiers.
+        let debug_ids = ui::debug_info::DebugIds::new(ui.widget_id_generator());
+        let console_ids = ui::console::ConsoleIds::new(ui.widget_id_generator());
+
         // Load font from file
         let assets = find_folder::Search::KidsThenParents(2, 4).for_folder("assets").unwrap();
         let font_path = assets.join("fonts/noto_sans_regular.ttf");
@@ -238,10 +251,31 @@ pub mod core {
             (cache, texture, texture_view)
         };
 
+        let mut console = ui::console::Console::new(publisher.clone(), console_sub);
+        let debug_info = ui::debug_info::DebugInfo::new();
+
+        // Poll events from the window.
+        let mut frame_time = support::frame_clock::FrameClock::new();
+
         // Event loop
         let mut events = window.poll_events();
 
         'main: loop {
+            frame_time.tick();
+
+            {
+                let ui = &mut ui.set_widgets();
+
+                debug_info.update(ui,
+                                  &debug_ids,
+                                  frame_time.get_fps(),
+                                  frame_time.get_last_frame_duration(),
+                                  cam.get_eye());
+                // TODO: Move this to a UIRenderable component and use ECS
+                console.update(ui, &console_ids);
+            }
+            cam.update();
+
             // If the window is closed, this will be None for one tick, so to avoid panicking with
             // unwrap, instead break the loop
             let (win_w, win_h) = match window.get_inner_size() {
@@ -250,6 +284,90 @@ pub mod core {
             };
 
             let dpi_factor = window.hidpi_factor();
+
+            if let Some(mut primitives) = ui.draw_if_changed() {
+                let (screen_width, screen_height) = (win_w as f32 * dpi_factor, win_h as f32 * dpi_factor);
+                let mut vertices = Vec::new();
+
+                // Create vertices
+                while let Some(render::Primitive { id, kind, scizzor, rect }) = primitives.next() {
+                    match kind {
+                        render::PrimitiveKind::Rectangle { color } => {
+                        },
+                        render::PrimitiveKind::Polygon { color, points } => {
+                        },
+                        render::PrimitiveKind::Lines { color, cap, thickness, points } => {
+                        },
+                        render::PrimitiveKind::Image { image_id, color, source_rect } => {
+                        },
+                        render::PrimitiveKind::Text { color, text, font_id } => {
+                            let positioned_glyphs = text.positioned_glyphs(dpi_factor);
+
+                            // Queue the glyphs to be cached
+                            for glyph in positioned_glyphs {
+                                glyph_cache.queue_glyph(font_id.index(), glyph.clone());
+                            }
+
+                            glyph_cache.cache_queued(|rect, data| {
+                                let offset = [rect.min.x as u16, rect.min.y as u16];
+                                let size = [rect.width() as u16, rect.height() as u16];
+
+                                let new_data = data.iter().map(|x| [0, 0, 0, *x]).collect::<Vec<_>>();
+
+                                update_texture(&mut encoder, &cache_tex, offset, size, &new_data);
+                            }).unwrap();
+
+                            let color = color.to_fsa();
+                            let cache_id = font_id.index();
+                            let origin = rt::point(0.0, 0.0);
+
+                            // A closure to convert RustType rects to GL rects
+                            let to_gl_rect = |screen_rect: rt::Rect<i32>| rt::Rect {
+                                min: origin
+                                    + (rt::vector(screen_rect.min.x as f32 / screen_width - 0.5,
+                                                  1.0 - screen_rect.min.y as f32 / screen_height - 0.5)) * 2.0,
+                                max: origin
+                                    + (rt::vector(screen_rect.max.x as f32 / screen_width - 0.5,
+                                                  1.0 - screen_rect.max.y as f32 / screen_height - 0.5)) * 2.0,
+                            };
+
+                            // Create new vertices
+                            let extension = positioned_glyphs.into_iter()
+                                .filter_map(|g| glyph_cache.rect_for(cache_id, g).ok().unwrap_or(None))
+                                .flat_map(|(uv_rect, screen_rect)| {
+                                    use std::iter::once;
+
+                                    let gl_rect = to_gl_rect(screen_rect);
+                                    let v = |pos, uv| once(Vertex::new(pos, uv, color));
+
+                                    v([gl_rect.min.x, gl_rect.max.y], [uv_rect.min.x, uv_rect.max.y])
+                                        .chain(v([gl_rect.min.x, gl_rect.min.y], [uv_rect.min.x, uv_rect.min.y]))
+                                        .chain(v([gl_rect.max.x, gl_rect.min.y], [uv_rect.max.x, uv_rect.min.y]))
+                                        .chain(v([gl_rect.max.x, gl_rect.min.y], [uv_rect.max.x, uv_rect.min.y]))
+                                        .chain(v([gl_rect.max.x, gl_rect.max.y], [uv_rect.max.x, uv_rect.max.y]))
+                                        .chain(v([gl_rect.min.x, gl_rect.max.y], [uv_rect.min.x, uv_rect.max.y]))
+                                });
+
+                            vertices.extend(extension);
+                        },
+                        render::PrimitiveKind::Other(_) => {},
+                    }
+                }
+
+                // Clear the window
+                encoder.clear(&main_color, CLEAR_COLOR);
+
+                // Draw the vertices
+                data.color.0 = cache_tex_view.clone();
+                let (vbuf, slice) = factory.create_vertex_buffer_with_slice(&vertices, ());
+                data.vbuf = vbuf;
+                encoder.draw(&slice, &pso, &data);
+
+                // Display the results
+                encoder.flush(&mut device);
+                window.swap_buffers().unwrap();
+                device.cleanup();
+            }
 
             if let Some(event) = events.next() {
                 let (w, h) = (win_w as conrod::Scalar, win_h as conrod::Scalar);
