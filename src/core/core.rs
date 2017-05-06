@@ -3,6 +3,7 @@ pub mod core {
 
     use conrod;
     use glutin;
+    use glutin::Event;
     use gfx;
     use gfx_window_glutin;
 
@@ -187,7 +188,7 @@ pub mod core {
         // Initialize gfx things
         let (window, mut device, mut factory, main_color, _) =
             gfx_window_glutin::init::<ColorFormat, DepthFormat>(builder);
-        let mut encoder: gfx::Encoder<_, _> = factory.create_command_buffer().into();
+        //let mut encoder: gfx::Encoder<_, _> = factory.create_command_buffer().into();
 
         // Create texture sampler
         let sampler_info = texture::SamplerInfo::new(texture::FilterMethod::Bilinear,

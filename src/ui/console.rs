@@ -181,7 +181,7 @@ impl Console {
             .set(ids.bg, ui);
 
         // Create the list of entries in the console log.
-        let (mut items, scrollbar) = widget::List::new(self.buffer.len())
+        let (mut items, scrollbar) = widget::List::flow_up(self.buffer.len())
             .scrollbar_on_top()
             .middle_of(ids.bg)
             .w_h(self.window_w - 10.0, self.window_h - 10.0)
