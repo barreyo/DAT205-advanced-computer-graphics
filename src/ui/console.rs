@@ -27,15 +27,9 @@ pub enum ConsoleLogLevel {
 impl ConsoleLogLevel {
     fn value(&self) -> conrod::Color {
         match *self {
-            ConsoleLogLevel::INFO    => {
-                colors::WHITE.to_conrod_color()
-            },
-            ConsoleLogLevel::WARNING => {
-                colors::LIGHT_YELLOW.to_conrod_color()
-            },
-            ConsoleLogLevel::ERROR   => {
-                colors::LIGHT_RED.to_conrod_color()
-            },
+            ConsoleLogLevel::INFO => colors::WHITE.to_conrod_color(),
+            ConsoleLogLevel::WARNING => colors::LIGHT_YELLOW.to_conrod_color(),
+            ConsoleLogLevel::ERROR => colors::LIGHT_RED.to_conrod_color(),
         }
     }
 }
@@ -58,21 +52,22 @@ pub struct ConsoleEntry {
 }
 
 pub struct Console {
-    buffer:             VecDeque<ConsoleEntry>,
-    text_field_buffer:  String,
-    publisher:          alewife::Publisher<event::EventID, event::Event>,
-    event_queue:        alewife::Subscriber<event::EventID, event::Event>,
-    window_w:           f64,
-    window_h:           f64,
-    window_x:           f64,
-    window_y:           f64,
-    font_size:          u32,
-    visible:            bool,
+    buffer: VecDeque<ConsoleEntry>,
+    text_field_buffer: String,
+    publisher: alewife::Publisher<event::EventID, event::Event>,
+    event_queue: alewife::Subscriber<event::EventID, event::Event>,
+    window_w: f64,
+    window_h: f64,
+    window_x: f64,
+    window_y: f64,
+    font_size: u32,
+    visible: bool,
 }
 
 impl Console {
     pub fn new(publisher: alewife::Publisher<event::EventID, event::Event>,
-               e_que: alewife::Subscriber<event::EventID, event::Event>) -> Console {
+               e_que: alewife::Subscriber<event::EventID, event::Event>)
+               -> Console {
         Console {
             buffer: VecDeque::with_capacity(100),
             text_field_buffer: "".to_string(),
@@ -83,7 +78,7 @@ impl Console {
             window_x: 200.0,
             window_y: 200.0,
             font_size: 11,
-            visible: true
+            visible: true,
         }
     }
 
@@ -95,16 +90,20 @@ impl Console {
         if self.buffer.len() >= self.buffer.capacity() {
             self.buffer.pop_back();
         }
-        let new_entry = ConsoleEntry{text: entry, level: level};
+        let new_entry = ConsoleEntry {
+            text: entry,
+            level: level,
+        };
         self.buffer.push_front(new_entry);
     }
 
     fn process_command(&mut self, cmd: &str) {
         match BULTIN_COMMANDS.get(cmd) {
             Some(&(id, ref evt)) => self.publisher.publish(id, evt.clone()),
-            None => self.add_entry(
-                "Command not found: ".to_owned() + cmd,
-                ConsoleLogLevel::WARNING),
+            None => {
+                self.add_entry("Command not found: ".to_owned() + cmd,
+                               ConsoleLogLevel::WARNING)
+            }
         }
     }
 
@@ -127,25 +126,41 @@ impl Console {
         for event in events {
             match event {
                 (_, event::Event::ConsoleMessage(msg, level)) => self.add_entry(msg, level),
-                (_, event::Event::ReloadShaders)              => self.add_entry("Reloading shaders...".to_owned(), ConsoleLogLevel::INFO),
-                (_, event::Event::ToggleWireframe)            => self.add_entry("Toggled wireframe mode...".to_owned(), ConsoleLogLevel::INFO),
-                (_, event::Event::SetWindowSize(w, h))        => self.add_entry(format!("Setting window size to w: {} h: {}", w, h), ConsoleLogLevel::INFO),
-                (_, event::Event::ToggleFullscreen)           => self.add_entry("Toggle Fullscreen".to_owned(), ConsoleLogLevel::INFO),
-                (_, event::Event::ToggleVSync)                => self.add_entry("Toggle Vertical Sync".to_owned(), ConsoleLogLevel::INFO),
-                (_, event::Event::SetCameraPos(x, y))         => self.add_entry(format!("Moved Camera to x: {} y: {}", x, y), ConsoleLogLevel::INFO),
-                (_, event::Event::ToggleConsole)              => {
-                    self.add_entry("INFO: Toggle console visibility".to_owned(), ConsoleLogLevel::INFO);
+                (_, event::Event::ReloadShaders) => {
+                    self.add_entry("Reloading shaders...".to_owned(), ConsoleLogLevel::INFO)
+                }
+                (_, event::Event::ToggleWireframe) => {
+                    self.add_entry("Toggled wireframe mode...".to_owned(),
+                                   ConsoleLogLevel::INFO)
+                }
+                (_, event::Event::SetWindowSize(w, h)) => {
+                    self.add_entry(format!("Setting window size to w: {} h: {}", w, h),
+                                   ConsoleLogLevel::INFO)
+                }
+                (_, event::Event::ToggleFullscreen) => {
+                    self.add_entry("Toggle Fullscreen".to_owned(), ConsoleLogLevel::INFO)
+                }
+                (_, event::Event::ToggleVSync) => {
+                    self.add_entry("Toggle Vertical Sync".to_owned(), ConsoleLogLevel::INFO)
+                }
+                (_, event::Event::SetCameraPos(x, y)) => {
+                    self.add_entry(format!("Moved Camera to x: {} y: {}", x, y),
+                                   ConsoleLogLevel::INFO)
+                }
+                (_, event::Event::ToggleConsole) => {
+                    self.add_entry("INFO: Toggle console visibility".to_owned(),
+                                   ConsoleLogLevel::INFO);
                     self.toggle_visible();
-                },
-                (_, evt)                                      => {
+                }
+                (_, evt) => {
                     self.add_entry(format!("INFO: {:?}", evt), ConsoleLogLevel::INFO);
-                },
+                }
             }
         }
 
         // Do not draw anything if not shown
         if !self.visible {
-            return
+            return;
         }
 
         // Canvas or to not Canvas? that is the question
@@ -166,7 +181,7 @@ impl Console {
             .set(ids.bg, ui);
 
         // Create the list of entries in the console log.
-        let (mut items, scrollbar) = widget::List::new(self.buffer.len(), 15.0)
+        let (mut items, scrollbar) = widget::List::new(self.buffer.len())
             .scrollbar_on_top()
             .middle_of(ids.bg)
             .w_h(self.window_w - 10.0, self.window_h - 10.0)
@@ -177,8 +192,8 @@ impl Console {
             if let Some(ev) = self.buffer.get(i as usize) {
                 let label = format!("{}", ev.text);
                 let e_string = widget::Text::new(label.as_str())
-                                    .font_size(self.font_size)
-                                    .color(ev.level.value());
+                    .font_size(self.font_size)
+                    .color(ev.level.value());
                 item.set(e_string, ui);
             }
         }
@@ -193,8 +208,7 @@ impl Console {
             .w_h(self.window_w, 30.0)
             .font_size(12)
             .down_from(ids.bg, 1.0)
-            .set(ids.input, ui)
-        {
+            .set(ids.input, ui) {
             match edit {
                 widget::text_box::Event::Enter => {
                     let current_str = self.text_field_buffer.clone().to_owned();
@@ -202,11 +216,11 @@ impl Console {
                         self.process_command(&current_str.to_owned());
                     }
                     self.text_field_buffer = "".to_string();
-                },
+                }
                 widget::text_box::Event::Update(string) => {
                     let s = string.clone().to_owned();
                     self.text_field_buffer = s;
-                },
+                }
             }
         }
     }
