@@ -39,13 +39,13 @@ impl DebugInfo {
             return
         }
 
-        Rectangle::fill_with([100.0, 40.0], conrod::Color::Rgba(0.0, 0.0, 0.0, 0.8))
+        Rectangle::fill_with([100.0, 40.0], conrod::Color::Rgba(0.0, 0.0, 0.0, 1.0))
             .top_left_of(ui.window)
             .set(ids.bg, ui);
 
         widget::Text::new(format!("{} fps ({} ms)\nx: {:.2} y: {:.2} z: {:.2}", fps, ms,
                                   cam_pos.x, cam_pos.y, cam_pos.z).as_str())
-            .middle_of(ids.bg)
+            .top_left_with_margins_on(ids.bg, 2.0, 4.0)
             .color(conrod::color::WHITE)
             .font_size(12)
             .set(ids.fps_text, ui);

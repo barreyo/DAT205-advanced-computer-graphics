@@ -164,19 +164,18 @@ impl Console {
         }
 
         // Canvas or to not Canvas? that is the question
-        /*let floating = widget::Canvas::new()
+        widget::Canvas::new()
             .floating(true)
             .w_h(self.window_w, self.window_h)
-            .label_color(conrod::color::WHITE);
-        floating
             .middle_of(ui.window)
             .title_bar("Console")
             .color(conrod::color::CHARCOAL)
             .set(ids.container, ui);
-        */
+
         // Create background of the console window
         Rectangle::fill_with([300.0, 200.0], conrod::Color::Rgba(0.0, 0.0, 0.0, 0.8))
             .w_h(self.window_w, self.window_h)
+            .color(conrod::color::CHARCOAL)
             .x_y(self.window_x, self.window_y)
             .set(ids.bg, ui);
 
