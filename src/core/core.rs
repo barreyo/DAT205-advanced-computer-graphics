@@ -255,7 +255,7 @@ pub mod core {
         let mut console = ui::console::Console::new(publisher.clone(), console_sub);
         let debug_info = ui::debug_info::DebugInfo::new();
 
-        // Poll events from the window.
+        let mut terrain = rendering::terrain::
         let mut frame_time = support::frame_clock::FrameClock::new();
 
         // Event loop
@@ -292,7 +292,7 @@ pub mod core {
                 let mut vertices = Vec::new();
 
                 // Create vertices
-                while let Some(render::Primitive { id, kind, scissor, rect }) = primitives.next() {
+                while let Some(render::Primitive { id, kind, scizzor, rect }) = primitives.next() {
                     match kind {
                         render::PrimitiveKind::Rectangle { color } => {
 
@@ -382,6 +382,7 @@ pub mod core {
                 }
 
                 // Clear the window
+                encoder.clear_depth(&main_depth, 1.0);
                 encoder.clear(&main_color, CLEAR_COLOR);
 
                 // Draw the vertices

@@ -6,6 +6,10 @@ extern crate gfx;
 extern crate gfx_core;
 extern crate gfx_window_glutin;
 
+extern crate genmesh;
+extern crate noise;
+extern crate rand;
+
 #[macro_use]
 extern crate lazy_static;
 extern crate find_folder;

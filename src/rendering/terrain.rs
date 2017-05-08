@@ -1,5 +1,15 @@
 
+use gfx;
 
+pub use gfx::format::{DepthStencil};
+
+use genmesh::{Vertices, Triangulate};
+use genmesh::generators::{Plane, SharedVertex, IndexedPolygon};
+use noise::{Seed, perlin2};
+use rand::Rng;
+
+pub type ColorFormat = gfx::format::Srgba8;
+type DepthFormat = gfx::format::DepthStencil;
 
 gfx_defines!{
     vertex Vertex {
@@ -25,6 +35,37 @@ gfx_defines!{
     }
 }
 
+const FRAGMENT_SHADER: &'static [u8] = b"
+    #version 150 core
+
+    in vec3 v_Color;
+    out vec4 Target0;
+
+    void main() {
+        Target0 = vec4(v_Color, 1.0);
+    }
+";
+
+const VERTEX_SHADER: &'static [u8] = b"
+    #version 150 core
+
+    in vec3 a_Pos;
+    in vec3 a_Color;
+    out vec3 v_Color;
+
+    uniform Locals {
+        mat4 u_Model;
+        mat4 u_View;
+        mat4 u_Proj;
+    };
+
+    void main() {
+        v_Color = a_Color;
+        gl_Position = u_Proj * u_View * u_Model * vec4(a_Pos, 1.0);
+        gl_ClipDistance[0] = 1.0;
+    }
+";
+
 fn get_terrain_color(height: f32) -> [f32; 3] {
     if height > 0.5 {
         [0.5, 0.2, 0.9]
@@ -46,22 +87,8 @@ impl<R: gfx::Resources> Terrain<R> {
                                -> Self {
         use gfx::traits::FactoryExt;
 
-        let vs = gfx_app::shade::Source {
-            glsl_120: include_bytes!("shader/terrain_120.glslv"),
-            glsl_150: include_bytes!("shader/terrain_150.glslv"),
-            hlsl_40: include_bytes!("data/vertex.fx"),
-            msl_11: include_bytes!("shader/terrain_vertex.metal"),
-            vulkan: include_bytes!("data/vert.spv"),
-            ..gfx_app::shade::Source::empty()
-        };
-        let ps = gfx_app::shade::Source {
-            glsl_120: include_bytes!("shader/terrain_120.glslf"),
-            glsl_150: include_bytes!("shader/terrain_150.glslf"),
-            hlsl_40: include_bytes!("data/pixel.fx"),
-            msl_11: include_bytes!("shader/terrain_frag.metal"),
-            vulkan: include_bytes!("data/frag.spv"),
-            ..gfx_app::shade::Source::empty()
-        };
+        let pso = factory.create_pipeline_simple(VERTEX_SHADER, FRAGMENT_SHADER, pipe::new())
+            .unwrap();
 
         let rand_seed = rand::thread_rng().gen();
         let seed = Seed::new(rand_seed);
@@ -71,7 +98,7 @@ impl<R: gfx::Resources> Terrain<R> {
                 let h = perlin2(&seed, &[x, y]) * 32.0;
                 Vertex {
                     pos: [25.0 * x, 25.0 * y, h],
-                    color: calculate_color(h),
+                    color: get_terrain_color(h),
                 }
             })
             .collect();
@@ -84,36 +111,22 @@ impl<R: gfx::Resources> Terrain<R> {
 
         let (vbuf, slice) = factory.create_vertex_buffer_with_slice(&vertex_data, &index_data[..]);
 
-        App {
-            pso: factory.create_pipeline_simple(vs.select(backend).unwrap(),
-                                        ps.select(backend).unwrap(),
-                                        pipe::new())
-                .unwrap(),
+        Terrain {
+            pso: pso,
             data: pipe::Data {
                 vbuf: vbuf,
                 locals: factory.create_constant_buffer(1),
                 model: Matrix4::identity().into(),
                 view: Matrix4::identity().into(),
-                proj: cgmath::perspective(Deg(60.0f32), window_targets.aspect_ratio, 0.1, 1000.0)
-                    .into(),
                 out_color: window_targets.color,
                 out_depth: window_targets.depth,
             },
             slice: slice,
-            start_time: Instant::now(),
         }
     }
 
     fn render<C: gfx::CommandBuffer<R>>(&mut self, encoder: &mut gfx::Encoder<R, C>) {
-        let elapsed = self.start_time.elapsed();
-        let time = elapsed.as_secs() as f32 + elapsed.subsec_nanos() as f32 / 1000_000_000.0;
-        let x = time.sin();
-        let y = time.cos();
-        let view = Matrix4::look_at(Point3::new(x * 32.0, y * 32.0, 16.0),
-                                    Point3::new(0.0, 0.0, 0.0),
-                                    Vector3::unit_z());
 
-        self.data.view = view.into();
         let locals = Locals {
             model: self.data.model,
             view: self.data.view,
@@ -121,15 +134,6 @@ impl<R: gfx::Resources> Terrain<R> {
         };
 
         encoder.update_buffer(&self.data.locals, &[locals], 0).unwrap();
-        encoder.clear(&self.data.out_color, [0.3, 0.3, 0.3, 1.0]);
-        encoder.clear_depth(&self.data.out_depth, 1.0);
         encoder.draw(&self.slice, &self.pso, &self.data);
-    }
-
-    fn on_resize(&mut self, window_targets: gfx_app::WindowTargets<R>) {
-        self.data.out_color = window_targets.color;
-        self.data.out_depth = window_targets.depth;
-        self.data.proj =
-            cgmath::perspective(Deg(60.0f32), window_targets.aspect_ratio, 0.1, 1000.0).into();
     }
 }
