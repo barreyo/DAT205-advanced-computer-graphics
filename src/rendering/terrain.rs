@@ -1,12 +1,16 @@
 
 use gfx;
 
-pub use gfx::format::{DepthStencil};
+pub use gfx::format::DepthStencil;
 
 use genmesh::{Vertices, Triangulate};
 use genmesh::generators::{Plane, SharedVertex, IndexedPolygon};
-use noise::{Seed, perlin2};
+use noise::perlin2;
+use noise;
 use rand::Rng;
+use rand;
+
+use na::{Matrix4, Point3};
 
 pub type ColorFormat = gfx::format::Srgba8;
 type DepthFormat = gfx::format::DepthStencil;
@@ -19,19 +23,14 @@ gfx_defines!{
 
     constant Locals {
         model: [[f32; 4]; 4] = "u_Model",
-        view: [[f32; 4]; 4] = "u_View",
-        proj: [[f32; 4]; 4] = "u_Proj",
+        view_proj: [[f32; 4]; 4] = "u_ViewProj",
     }
 
     pipeline pipe {
         vbuf:      gfx::VertexBuffer<Vertex> = (),
         locals:    gfx::ConstantBuffer<Locals> = "Locals",
         model:     gfx::Global<[[f32; 4]; 4]> = "u_Model",
-        view:      gfx::Global<[[f32; 4]; 4]> = "u_View",
-        proj:      gfx::Global<[[f32; 4]; 4]> = "u_Proj",
-        out_color: gfx::RenderTarget<ColorFormat> = "Target0",
-        out_depth: gfx::DepthTarget<DepthFormat> =
-                   gfx::preset::depth::LESS_EQUAL_WRITE,
+        view_proj:      gfx::Global<[[f32; 4]; 4]> = "u_ViewProj",
     }
 }
 
@@ -55,13 +54,12 @@ const VERTEX_SHADER: &'static [u8] = b"
 
     uniform Locals {
         mat4 u_Model;
-        mat4 u_View;
-        mat4 u_Proj;
+        mat4 u_ViewProj;
     };
 
     void main() {
         v_Color = a_Color;
-        gl_Position = u_Proj * u_View * u_Model * vec4(a_Pos, 1.0);
+        gl_Position = u_ViewProj * u_Model * vec4(a_Pos, 1.0);
         gl_ClipDistance[0] = 1.0;
     }
 ";
@@ -74,28 +72,25 @@ fn get_terrain_color(height: f32) -> [f32; 3] {
     }
 }
 
-struct Terrain<R: gfx::Resources> {
+pub struct Terrain<R: gfx::Resources> {
     pso: gfx::PipelineState<R, pipe::Meta>,
     data: pipe::Data<R>,
     slice: gfx::Slice<R>,
 }
 
 impl<R: gfx::Resources> Terrain<R> {
-    fn new<F: gfx::Factory<R>>(factory: &mut F,
-                               backend: gfx_app::shade::Backend,
-                               window_targets: gfx_app::WindowTargets<R>)
-                               -> Self {
+    pub fn new<F: gfx::Factory<R>>(size: usize, factory: &mut F) -> Self {
         use gfx::traits::FactoryExt;
 
         let pso = factory.create_pipeline_simple(VERTEX_SHADER, FRAGMENT_SHADER, pipe::new())
             .unwrap();
 
         let rand_seed = rand::thread_rng().gen();
-        let seed = Seed::new(rand_seed);
-        let plane = Plane::subdivide(256, 256);
+        let plane = Plane::subdivide(size, size);
+
         let vertex_data: Vec<Vertex> = plane.shared_vertex_iter()
             .map(|(x, y)| {
-                let h = perlin2(&seed, &[x, y]) * 32.0;
+                let h = perlin2(&rand_seed, &[x, y]) * 32.0;
                 Vertex {
                     pos: [25.0 * x, 25.0 * y, h],
                     color: get_terrain_color(h),
@@ -117,20 +112,19 @@ impl<R: gfx::Resources> Terrain<R> {
                 vbuf: vbuf,
                 locals: factory.create_constant_buffer(1),
                 model: Matrix4::identity().into(),
-                view: Matrix4::identity().into(),
-                out_color: window_targets.color,
-                out_depth: window_targets.depth,
+                view_proj: Matrix4::identity().into(),
             },
             slice: slice,
         }
     }
 
-    fn render<C: gfx::CommandBuffer<R>>(&mut self, encoder: &mut gfx::Encoder<R, C>) {
+    pub fn render<C: gfx::CommandBuffer<R>>(&mut self,
+                                            encoder: &mut gfx::Encoder<R, C>,
+                                            view_proj: [[f32; 4]; 4]) {
 
         let locals = Locals {
             model: self.data.model,
-            view: self.data.view,
-            proj: self.data.proj,
+            view_proj: view_proj,
         };
 
         encoder.update_buffer(&self.data.locals, &[locals], 0).unwrap();

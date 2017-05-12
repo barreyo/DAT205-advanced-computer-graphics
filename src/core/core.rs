@@ -20,6 +20,11 @@ pub mod core {
     use support;
     use ui;
     use rendering;
+    use rendering::terrain::pipe::new;
+
+    use std::fs::File;
+    use std::io::BufReader;
+    use obj::*;
 
     const DEFAULT_WINDOW_WIDTH: u32 = 1200;
     const DEFAULT_WINDOW_HEIGHT: u32 = 1000;
@@ -255,7 +260,12 @@ pub mod core {
         let mut console = ui::console::Console::new(publisher.clone(), console_sub);
         let debug_info = ui::debug_info::DebugInfo::new();
 
-        let mut terrain = rendering::terrain::
+        let teapot_input = BufReader::new(File::open("../../assets/models/teapot.obj").unwrap());
+        let teapot: Obj = load_obj(teapot_input).unwrap();
+
+        //let mut terrain =
+        //    rendering::terrain::Terrain::new(1024 as usize, &mut factory, &main_color, &main_depth);
+
         let mut frame_time = support::frame_clock::FrameClock::new();
 
         // Event loop
@@ -389,6 +399,7 @@ pub mod core {
                 data.color.0 = cache_tex_view.clone();
                 let (vbuf, slice) = factory.create_vertex_buffer_with_slice(&vertices, ());
                 data.vbuf = vbuf;
+                //terrain.render(&mut encoder, cam.get_view_proj().into());
                 encoder.draw(&slice, &pso, &data);
 
                 // Display the results
@@ -411,7 +422,7 @@ pub mod core {
                 match event {
                     glutin::Event::KeyboardInput(_, _, Some(glutin::VirtualKeyCode::Escape)) |
                     glutin::Event::Closed => break 'main,
-                    glutin::WindowEvent::Resized(_width, _height) => {
+                    glutin::Event::Resized(_width, _height) => {
                         gfx_window_glutin::update_views(&window, &mut data.out, &mut main_depth);
                     }
 

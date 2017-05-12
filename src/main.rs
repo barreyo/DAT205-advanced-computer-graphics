@@ -10,6 +10,8 @@ extern crate genmesh;
 extern crate noise;
 extern crate rand;
 
+extern crate obj;
+
 #[macro_use]
 extern crate lazy_static;
 extern crate find_folder;
