@@ -1,5 +1,6 @@
 
 use gfx;
+use gfx_core;
 
 pub use gfx::format::DepthStencil;
 
@@ -30,7 +31,7 @@ gfx_defines!{
         vbuf:      gfx::VertexBuffer<Vertex> = (),
         locals:    gfx::ConstantBuffer<Locals> = "Locals",
         model:     gfx::Global<[[f32; 4]; 4]> = "u_Model",
-        view_proj:      gfx::Global<[[f32; 4]; 4]> = "u_ViewProj",
+        view_proj: gfx::Global<[[f32; 4]; 4]> = "u_ViewProj",
     }
 }
 

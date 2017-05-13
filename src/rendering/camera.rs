@@ -1,6 +1,7 @@
 
 use alewife;
 use core::event;
+use glutin;
 
 use na::{Point3, Vector2, Vector3, Matrix4, Isometry3, Perspective3, Translation3};
 use na;
@@ -16,6 +17,14 @@ pub struct Camera {
     inv_proj_view: Matrix4<f32>,
     proj_view: Matrix4<f32>,
     prev_mouse_pos: Vector2<f32>,
+
+    moving_up: bool,
+    moving_down: bool,
+    moving_forward: bool,
+    moving_backward: bool,
+    moving_left: bool,
+    moving_right: bool,
+    moving_rotating: bool,
 }
 
 // TODO: Create a camera builder so perspective settings etc can be tweaked.
@@ -36,6 +45,15 @@ impl Camera {
             inv_proj_view: na::zero(),
             proj_view: na::zero(),
             prev_mouse_pos: na::zero(),
+
+            moving_up: false,
+            moving_down: false,
+            moving_forward: false,
+            moving_backward: false,
+            moving_left: false,
+            moving_right: false,
+
+            moving_rotating: true,
         }
     }
 
@@ -109,7 +127,7 @@ impl Camera {
         self.update_proj_view();
     }
 
-    fn handle_input(&mut self, left: bool, right: bool, up: bool, down: bool) -> Vector3<f32> {
+    fn handle_input(&mut self) -> Vector3<f32> {
 
         let transf = self.view_transform();
         let vforward = transf * Vector3::z();
@@ -117,16 +135,16 @@ impl Camera {
 
         let mut mvm = na::zero::<Vector3<f32>>();
 
-        if left {
+        if self.moving_left {
             mvm = mvm + vright
         }
-        if right {
+        if self.moving_right {
             mvm = mvm - vright
         }
-        if up {
+        if self.moving_forward {
             mvm = mvm + vforward
         }
-        if down {
+        if self.moving_backward {
             mvm = mvm - vforward
         }
 
@@ -137,14 +155,9 @@ impl Camera {
         }
     }
 
-    pub fn update(&mut self) {
+    pub fn update(&mut self, event: &glutin::Event) {
 
         let events: Vec<_> = self.event_queue.fetch();
-        let mut left = false;
-        let mut right = false;
-        let mut up = false;
-        let mut down = false;
-        let mut rotate_button = false;
 
         for event in events {
             match event {
@@ -154,40 +167,96 @@ impl Camera {
         }
 
         let mut cur_mouse_pos = self.prev_mouse_pos;
-        /*for evt in window_evts {
-            match *evt {
-               
-                glium::glutin::Event::KeyboardInput(glium::glutin::ElementState::Pressed, _, Some(glium::glutin::VirtualKeyCode::W)) => {
-                    up = true;
-                },
-                glium::glutin::Event::KeyboardInput(glium::glutin::ElementState::Pressed, _, Some(glium::glutin::VirtualKeyCode::A)) => {
-                    left = true;
-                },
-                glium::glutin::Event::KeyboardInput(glium::glutin::ElementState::Pressed, _, Some(glium::glutin::VirtualKeyCode::S)) => {
-                    down = true;
-                },
-                glium::glutin::Event::KeyboardInput(glium::glutin::ElementState::Pressed, _, Some(glium::glutin::VirtualKeyCode::D)) => {
-                    right = true;
-                },
-                glium::glutin::Event::MouseInput(glium::glutin::ElementState::Pressed, glium::glutin::MouseButton::Left) => {
-                    rotate_button = true;
-                },
-                glium::glutin::Event::MouseMoved(x, y) => {
-                    cur_mouse_pos = Vector2::new(x as f32, y as f32);
-                },
-                _ => {}
+        match event {
+            &glutin::Event::MouseMoved(x, y) => {
+                cur_mouse_pos = Vector2::new(x as f32, y as f32);
             }
-        }*/
+            _ => {}
+        }
 
-        if rotate_button {
+        if self.moving_rotating {
             let mouse_delta = cur_mouse_pos - self.prev_mouse_pos;
             self.handle_rotate(mouse_delta);
             self.prev_mouse_pos = cur_mouse_pos;
         }
 
-        let mvm_dir = self.handle_input(left, right, up, down);
+        let mvm_dir = self.handle_input();
         let mvm = mvm_dir * self.speed;
 
         self.translate(&Translation3::from_vector(mvm));
+    }
+
+    pub fn process_input(&mut self, event: &glutin::Event) {
+        match event {
+            &glutin::Event::KeyboardInput(glutin::ElementState::Pressed,
+                                          _,
+                                          Some(glutin::VirtualKeyCode::Space)) => {
+                self.moving_up = true;
+            }
+            &glutin::Event::KeyboardInput(glutin::ElementState::Released,
+                                          _,
+                                          Some(glutin::VirtualKeyCode::Space)) => {
+                self.moving_up = false;
+            }
+            &glutin::Event::KeyboardInput(glutin::ElementState::Pressed,
+                                          _,
+                                          Some(glutin::VirtualKeyCode::Down)) => {
+                self.moving_down = true;
+            }
+            &glutin::Event::KeyboardInput(glutin::ElementState::Released,
+                                          _,
+                                          Some(glutin::VirtualKeyCode::Down)) => {
+                self.moving_down = false;
+            }
+            &glutin::Event::KeyboardInput(glutin::ElementState::Pressed,
+                                          _,
+                                          Some(glutin::VirtualKeyCode::A)) => {
+                self.moving_left = true;
+            }
+            &glutin::Event::KeyboardInput(glutin::ElementState::Released,
+                                          _,
+                                          Some(glutin::VirtualKeyCode::A)) => {
+                self.moving_left = false;
+            }
+            &glutin::Event::KeyboardInput(glutin::ElementState::Pressed,
+                                          _,
+                                          Some(glutin::VirtualKeyCode::D)) => {
+                self.moving_right = true;
+            }
+            &glutin::Event::KeyboardInput(glutin::ElementState::Released,
+                                          _,
+                                          Some(glutin::VirtualKeyCode::D)) => {
+                self.moving_right = false;
+            }
+            &glutin::Event::KeyboardInput(glutin::ElementState::Pressed,
+                                          _,
+                                          Some(glutin::VirtualKeyCode::W)) => {
+                self.moving_forward = true;
+            }
+            &glutin::Event::KeyboardInput(glutin::ElementState::Released,
+                                          _,
+                                          Some(glutin::VirtualKeyCode::W)) => {
+                self.moving_forward = false;
+            }
+            &glutin::Event::KeyboardInput(glutin::ElementState::Pressed,
+                                          _,
+                                          Some(glutin::VirtualKeyCode::S)) => {
+                self.moving_backward = true;
+            }
+            &glutin::Event::KeyboardInput(glutin::ElementState::Released,
+                                          _,
+                                          Some(glutin::VirtualKeyCode::S)) => {
+                self.moving_backward = false;
+            }
+            &glutin::Event::MouseInput(glutin::ElementState::Pressed,
+                                       glutin::MouseButton::Left) => {
+                self.moving_rotating = true;
+            }
+            &glutin::Event::MouseInput(glutin::ElementState::Released,
+                                       glutin::MouseButton::Left) => {
+                self.moving_rotating = false;
+            }
+            _ => {}
+        }
     }
 }

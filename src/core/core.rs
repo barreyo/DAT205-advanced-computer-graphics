@@ -260,11 +260,11 @@ pub mod core {
         let mut console = ui::console::Console::new(publisher.clone(), console_sub);
         let debug_info = ui::debug_info::DebugInfo::new();
 
-        let teapot_input = BufReader::new(File::open("../../assets/models/teapot.obj").unwrap());
+        let teapot_input = BufReader::new(File::open("/Users/barre/Desktop/DAT205-advanced-computer-graphics/assets/models/teapot.obj").unwrap());
         let teapot: Obj = load_obj(teapot_input).unwrap();
 
-        //let mut terrain =
-        //    rendering::terrain::Terrain::new(1024 as usize, &mut factory, &main_color, &main_depth);
+        //      let mut terrain =
+        //        rendering::terrain::Terrain::new(1024 as usize, &mut factory, main_color, main_depth);
 
         let mut frame_time = support::frame_clock::FrameClock::new();
 
@@ -285,7 +285,6 @@ pub mod core {
                 // TODO: Move this to a UIRenderable component and use ECS
                 console.update(ui, &console_ids);
             }
-            cam.update();
 
             // If the window is closed, this will be None for one tick, so to avoid panicking with
             // unwrap, instead break the loop
@@ -399,7 +398,12 @@ pub mod core {
                 data.color.0 = cache_tex_view.clone();
                 let (vbuf, slice) = factory.create_vertex_buffer_with_slice(&vertices, ());
                 data.vbuf = vbuf;
-                //terrain.render(&mut encoder, cam.get_view_proj().into());
+
+                // let (tpbuf, tpslice) =
+                //    factory.create_vertex_buffer_with_slice(&teapot.vertices, ());
+                // encoder.draw(&tpslice, &pso, &tpbuf);
+
+                // terrain.render(&mut encoder, cam.get_view_proj().into());
                 encoder.draw(&slice, &pso, &data);
 
                 // Display the results
@@ -417,6 +421,8 @@ pub mod core {
                                                                      window.as_winit_window()) {
                     ui.handle_event(event);
                 }
+                cam.process_input(&event);
+                cam.update(&event);
 
                 // Close window if the escape key or the exit button is pressed
                 match event {
