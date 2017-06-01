@@ -4,13 +4,14 @@ pub mod core {
     use conrod;
     use glutin;
     use glutin::Event;
-    use gfx; use gfx_window_glutin;
+    use gfx;
+    use gfx_window_glutin;
 
     use gfx::{Factory, Device, texture};
     use gfx::traits::FactoryExt;
     use conrod::render;
     use conrod::text::rt;
-    use na::{Point3};
+    use na::Point3;
 
     use alewife;
     use find_folder;
@@ -183,7 +184,7 @@ pub mod core {
                                                      DEFAULT_WINDOW_WIDTH as f32,
                                                      Point3::new(0.0, -3.0, 0.0),
                                                      cam_sub);
-        cam.look_at(Point3::new(1.0, 1.0, 1.0), Point3::new(0.0, 0.0, 0.0));
+        cam.look_at(Point3::new(-1.0, -1.0, -1.0), Point3::new(0.0, 0.0, 0.0));
 
         let logger = support::logging::LogBuilder::new()
             .with_publisher(publisher.clone())
@@ -257,7 +258,10 @@ pub mod core {
         //let teapot_input = BufReader::new(File::open("/Users/barre/Desktop/DAT205-advanced-computer-graphics/assets/models/teapot.obj").unwrap());
         //let teapot: Obj = load_obj(teapot_input).unwrap();
 
-        let mut terrain = rendering::terrain::Terrain::new(1024 as usize, &mut factory, main_color.clone(), main_depth.clone());
+        let mut terrain = rendering::terrain::Terrain::new(1024 as usize,
+                                                           &mut factory,
+                                                           main_color.clone(),
+                                                           main_depth.clone());
 
         let mut frame_time = support::frame_clock::FrameClock::new();
 
@@ -302,11 +306,32 @@ pub mod core {
                             let color = color.to_fsa();
                             let (l, b, w, h) = rect.l_b_w_h();
                             let lbwh = [l, b, w, h];
-                            let v1 = once(Vertex::new([-0.5, -0.5], [-0.5, -0.5], color));
-                            let v2 = once(Vertex::new([0.5, -0.5], [0.5, -0.5], color));
-                            let v3 = once(Vertex::new([-0.5, 0.5], [-0.5, 0.5], color));
-                            let v4 = once(Vertex::new([0.5, 0.5], [0.5, 0.5], color));
+                            let ui_rect = Plane::new();
+                            
+                            let to_gl_rect = |screen_rect: rt::Rect<i32>| {
+                                rt::Rect {
+                                    min: origin +
+                                         (rt::vector(screen_rect.min.x as f32 / screen_width -
+                                                     0.5,
+                                                     1.0 -
+                                                     screen_rect.min.y as f32 / screen_height -
+                                                     0.5)) *
+                                         2.0,
+                                    max: origin +
+                                         (rt::vector(screen_rect.max.x as f32 / screen_width -
+                                                     0.5,
+                                                     1.0 -
+                                                     screen_rect.max.y as f32 / screen_height -
+                                                     0.5)) *
+                                         2.0,
+                                }
+                            };
 
+                            let vertex_data: Vec<Vertex> = ui_rect.shared_vertex_iter()
+                                .map(|(x, y)| {
+                                   Vertex::new([x, y], [0, 0], color)
+                                })
+                            
                         }
                         render::PrimitiveKind::Polygon { color, points } => {}
                         render::PrimitiveKind::Lines { color, cap, thickness, points } => {}
@@ -422,7 +447,8 @@ pub mod core {
                 }
                 cam.process_input(&event);
                 cam.update(&event);
- // Close window if the escape key or the exit button is pressed
+
+                // Close window if the escape key or the exit button is pressed
                 match event {
                     glutin::Event::KeyboardInput(_, _, Some(glutin::VirtualKeyCode::Escape)) |
                     glutin::Event::Closed => break 'main,

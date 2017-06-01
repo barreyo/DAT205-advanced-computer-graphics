@@ -9,7 +9,7 @@ use noise::perlin2;
 use rand::Rng;
 use rand;
 
-use na::{Matrix4};
+use na::Matrix4;
 
 gfx_defines!{
     vertex TerrainVertex {
@@ -88,7 +88,8 @@ impl<R: gfx::Resources> Terrain<R> {
     pub fn new<F: gfx::Factory<R>>(size: usize,
                                    factory: &mut F,
                                    main_color: gfx::handle::RenderTargetView<R, ColorFormat>,
-                                   main_depth: gfx::handle::DepthStencilView<R, DepthFormat>) -> Self {
+                                   main_depth: gfx::handle::DepthStencilView<R, DepthFormat>)
+                                   -> Self {
         use gfx::traits::FactoryExt;
 
         let pso = factory.create_pipeline_simple(VERTEX_SHADER, FRAGMENT_SHADER, terrain::new())
@@ -99,9 +100,9 @@ impl<R: gfx::Resources> Terrain<R> {
 
         let vertex_data: Vec<TerrainVertex> = plane.shared_vertex_iter()
             .map(|(x, y)| {
-                let h = perlin2(&rand_seed, &[x, y]) * 10.0;
+                let h = perlin2(&rand_seed, &[x, y]) * 8.0;
                 TerrainVertex {
-                    pos: [15.0 * x, 15.0 * y, h],
+                    pos: [100.0 * x, 100.0 * y, h],
                     color: get_terrain_color(h),
                 }
             })
