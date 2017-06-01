@@ -1,9 +1,16 @@
-#[cfg(all(feature="winit", feature="glium"))]
 #[macro_use]
 extern crate conrod;
+extern crate glutin;
 #[macro_use]
-extern crate glium;
-extern crate specs;
+extern crate gfx;
+extern crate gfx_core;
+extern crate gfx_window_glutin;
+
+extern crate genmesh;
+extern crate noise;
+extern crate rand;
+
+extern crate obj;
 
 #[macro_use]
 extern crate lazy_static;
@@ -24,9 +31,12 @@ mod support;
 mod ui;
 
 fn main() {
-    game::main();
-}
 
+    use core::core::core::init;
+
+    init();
+}
+/*
 #[cfg(all(feature="winit", feature="glium"))]
 mod game {
     use conrod;
@@ -90,8 +100,8 @@ mod game {
         let console_ids = ui::console::ConsoleIds::new(ui.widget_id_generator());
 
         // Add a `Font` to the `Ui`'s `font::Map` from file.
-        const FONT_PATH: &'static str =
-            concat!(env!("CARGO_MANIFEST_DIR"), "/assets/fonts/noto_sans_regular.ttf");
+        const FONT_PATH: &'static str = concat!(env!("CARGO_MANIFEST_DIR"),
+                                                "/assets/fonts/noto_sans_regular.ttf");
         ui.fonts.insert_from_file(FONT_PATH).unwrap();
 
         // A type used for converting `conrod::render::Primitives` into `Command`s that can be used
@@ -112,12 +122,19 @@ mod game {
             implement_vertex!(Vertex, position, color);
 
             glium::VertexBuffer::new(&display,
-                &[
-                    Vertex { position: [-0.5, -0.5], color: [0.0, 1.0, 0.0] },
-                    Vertex { position: [ 0.0,  0.5], color: [0.0, 0.0, 1.0] },
-                    Vertex { position: [ 0.5, -0.5], color: [1.0, 0.0, 0.0] },
-                ]
-            ).unwrap()
+                                     &[Vertex {
+                                           position: [-0.5, -0.5],
+                                           color: [0.0, 1.0, 0.0],
+                                       },
+                                       Vertex {
+                                           position: [0.0, 0.5],
+                                           color: [0.0, 0.0, 1.0],
+                                       },
+                                       Vertex {
+                                           position: [0.5, -0.5],
+                                           color: [1.0, 0.0, 0.0],
+                                       }])
+                .unwrap()
         };
 
         // compiling shaders and linking them together
@@ -188,16 +205,15 @@ mod game {
                     }
                 ",
             },
-        ).unwrap();
+        )
+            .unwrap();
 
         // building the index buffer
-        let index_buffer = glium::IndexBuffer::new(&display,
-                                                PrimitiveType::TrianglesList,
-                                                &[0u16, 1, 2])
-                                                .unwrap();
+        let index_buffer =
+            glium::IndexBuffer::new(&display, PrimitiveType::TrianglesList, &[0u16, 1, 2]).unwrap();
 
         let mut console = ui::console::Console::new(publisher.clone(), console_sub);
-        let debug_info  = ui::debug_info::DebugInfo::new();
+        let debug_info = ui::debug_info::DebugInfo::new();
 
         // Poll events from the window.
         let mut frame_time = support::frame_clock::FrameClock::new();
@@ -223,14 +239,14 @@ mod game {
                     glium::glutin::Event::KeyboardInput(glium::glutin::ElementState::Released, _, Some(glium::glutin::VirtualKeyCode::Key0)) => {
                         glium::glutin::WindowBuilder::new().with_fullscreen(glium::glutin::get_primary_monitor())
                                                     .rebuild_glium(&display).unwrap();
-                    },
+                    }
                     glium::glutin::Event::KeyboardInput(glium::glutin::ElementState::Released, _, Some(glium::glutin::VirtualKeyCode::Key2)) => {
                         warn!("Warning logged!");
-                    },
+                    }
                     glium::glutin::Event::KeyboardInput(glium::glutin::ElementState::Released, _, Some(glium::glutin::VirtualKeyCode::Comma)) => {
                         publisher.publish(event::EventID::UIEvent, event::Event::ToggleConsole);
-                    },
-                    _ => {},
+                    }
+                    _ => {}
                 }
             }
 
@@ -248,10 +264,22 @@ mod game {
             }
 
             cam.update(&events);
-            let model_matrix = Matrix4::new(1.0, 0.0, 0.0, 0.0,
-                                            0.0, 1.0, 0.0, 0.0,
-                                            0.0, 0.0, 1.0, 0.0,
-                                            0.0, 0.0, 0.0, 1.0);
+            let model_matrix = Matrix4::new(1.0,
+                                            0.0,
+                                            0.0,
+                                            0.0,
+                                            0.0,
+                                            1.0,
+                                            0.0,
+                                            0.0,
+                                            0.0,
+                                            0.0,
+                                            1.0,
+                                            0.0,
+                                            0.0,
+                                            0.0,
+                                            0.0,
+                                            1.0);
 
             // Render the `Ui` and then display it on the screen.
             let primitives = ui.draw();
@@ -264,9 +292,14 @@ mod game {
             renderer.fill(&display, primitives, &image_map);
             let mut target = display.draw();
             target.clear_color(0.5, 0.3, 0.7, 1.0);
-            target.draw(&vertex_buffer, &index_buffer, &program, &uniforms, &Default::default()).unwrap();
+            target.draw(&vertex_buffer,
+                      &index_buffer,
+                      &program,
+                      &uniforms,
+                      &Default::default())
+                .unwrap();
             renderer.draw(&display, &mut target, &image_map).unwrap();
             target.finish().unwrap();
         }
     }
-}
+}*/
