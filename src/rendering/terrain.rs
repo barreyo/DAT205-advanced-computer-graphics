@@ -1,37 +1,35 @@
 
 use gfx;
-use gfx_core;
 
 pub use gfx::format::DepthStencil;
 
 use genmesh::{Vertices, Triangulate};
 use genmesh::generators::{Plane, SharedVertex, IndexedPolygon};
 use noise::perlin2;
-use noise;
 use rand::Rng;
 use rand;
 
-use na::{Matrix4, Point3};
-
-pub type ColorFormat = gfx::format::Srgba8;
-type DepthFormat = gfx::format::DepthStencil;
+use na::{Matrix4};
 
 gfx_defines!{
-    vertex Vertex {
+    vertex TerrainVertex {
         pos: [f32; 3] = "a_Pos",
         color: [f32; 3] = "a_Color",
     }
 
-    constant Locals {
+    constant TerrainLocals {
         model: [[f32; 4]; 4] = "u_Model",
         view_proj: [[f32; 4]; 4] = "u_ViewProj",
     }
 
-    pipeline pipe {
-        vbuf:      gfx::VertexBuffer<Vertex> = (),
-        locals:    gfx::ConstantBuffer<Locals> = "Locals",
+    pipeline terrain {
+        vbuf:      gfx::VertexBuffer<TerrainVertex> = (),
+        locals:    gfx::ConstantBuffer<TerrainLocals> = "Locals",
         model:     gfx::Global<[[f32; 4]; 4]> = "u_Model",
         view_proj: gfx::Global<[[f32; 4]; 4]> = "u_ViewProj",
+        out_color: gfx::RenderTarget<ColorFormat> = "Target0",
+        out_depth: gfx::DepthTarget<DepthFormat> =
+            gfx::preset::depth::LESS_EQUAL_WRITE,
     }
 }
 
@@ -65,35 +63,45 @@ const VERTEX_SHADER: &'static [u8] = b"
     }
 ";
 
+pub type ColorFormat = gfx::format::Srgba8;
+type DepthFormat = gfx::format::DepthStencil;
+
 fn get_terrain_color(height: f32) -> [f32; 3] {
-    if height > 0.5 {
-        [0.5, 0.2, 0.9]
+    if height > 8.0 {
+        [0.9, 0.9, 0.9] // white
+    } else if height > 0.0 {
+        [0.7, 0.7, 0.7] // gray
+    } else if height > -5.0 {
+        [0.2, 0.7, 0.2] // green
     } else {
-        [0.8, 0.7, 0.2]
+        [0.2, 0.2, 0.7] // blue
     }
 }
 
 pub struct Terrain<R: gfx::Resources> {
-    pso: gfx::PipelineState<R, pipe::Meta>,
-    data: pipe::Data<R>,
+    pso: gfx::PipelineState<R, terrain::Meta>,
+    data: terrain::Data<R>,
     slice: gfx::Slice<R>,
 }
 
 impl<R: gfx::Resources> Terrain<R> {
-    pub fn new<F: gfx::Factory<R>>(size: usize, factory: &mut F) -> Self {
+    pub fn new<F: gfx::Factory<R>>(size: usize,
+                                   factory: &mut F,
+                                   main_color: gfx::handle::RenderTargetView<R, ColorFormat>,
+                                   main_depth: gfx::handle::DepthStencilView<R, DepthFormat>) -> Self {
         use gfx::traits::FactoryExt;
 
-        let pso = factory.create_pipeline_simple(VERTEX_SHADER, FRAGMENT_SHADER, pipe::new())
+        let pso = factory.create_pipeline_simple(VERTEX_SHADER, FRAGMENT_SHADER, terrain::new())
             .unwrap();
 
         let rand_seed = rand::thread_rng().gen();
         let plane = Plane::subdivide(size, size);
 
-        let vertex_data: Vec<Vertex> = plane.shared_vertex_iter()
+        let vertex_data: Vec<TerrainVertex> = plane.shared_vertex_iter()
             .map(|(x, y)| {
-                let h = perlin2(&rand_seed, &[x, y]) * 32.0;
-                Vertex {
-                    pos: [25.0 * x, 25.0 * y, h],
+                let h = perlin2(&rand_seed, &[x, y]) * 10.0;
+                TerrainVertex {
+                    pos: [15.0 * x, 15.0 * y, h],
                     color: get_terrain_color(h),
                 }
             })
@@ -109,11 +117,13 @@ impl<R: gfx::Resources> Terrain<R> {
 
         Terrain {
             pso: pso,
-            data: pipe::Data {
+            data: terrain::Data {
                 vbuf: vbuf,
                 locals: factory.create_constant_buffer(1),
                 model: Matrix4::identity().into(),
                 view_proj: Matrix4::identity().into(),
+                out_color: main_color.clone(),
+                out_depth: main_depth.clone(),
             },
             slice: slice,
         }
@@ -123,7 +133,7 @@ impl<R: gfx::Resources> Terrain<R> {
                                             encoder: &mut gfx::Encoder<R, C>,
                                             view_proj: [[f32; 4]; 4]) {
 
-        let locals = Locals {
+        let locals = TerrainLocals {
             model: self.data.model,
             view_proj: view_proj,
         };

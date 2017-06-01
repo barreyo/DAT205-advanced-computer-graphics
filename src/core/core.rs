@@ -4,14 +4,13 @@ pub mod core {
     use conrod;
     use glutin;
     use glutin::Event;
-    use gfx;
-    use gfx_window_glutin;
+    use gfx; use gfx_window_glutin;
 
     use gfx::{Factory, Device, texture};
     use gfx::traits::FactoryExt;
     use conrod::render;
     use conrod::text::rt;
-    use na::{Matrix4, Point3};
+    use na::{Point3};
 
     use alewife;
     use find_folder;
@@ -20,11 +19,6 @@ pub mod core {
     use support;
     use ui;
     use rendering;
-    use rendering::terrain::pipe::new;
-
-    use std::fs::File;
-    use std::io::BufReader;
-    use obj::*;
 
     const DEFAULT_WINDOW_WIDTH: u32 = 1200;
     const DEFAULT_WINDOW_HEIGHT: u32 = 1000;
@@ -260,11 +254,10 @@ pub mod core {
         let mut console = ui::console::Console::new(publisher.clone(), console_sub);
         let debug_info = ui::debug_info::DebugInfo::new();
 
-        let teapot_input = BufReader::new(File::open("/Users/barre/Desktop/DAT205-advanced-computer-graphics/assets/models/teapot.obj").unwrap());
-        let teapot: Obj = load_obj(teapot_input).unwrap();
+        //let teapot_input = BufReader::new(File::open("/Users/barre/Desktop/DAT205-advanced-computer-graphics/assets/models/teapot.obj").unwrap());
+        //let teapot: Obj = load_obj(teapot_input).unwrap();
 
-        //      let mut terrain =
-        //        rendering::terrain::Terrain::new(1024 as usize, &mut factory, main_color, main_depth);
+        let mut terrain = rendering::terrain::Terrain::new(1024 as usize, &mut factory, main_color.clone(), main_depth.clone());
 
         let mut frame_time = support::frame_clock::FrameClock::new();
 
@@ -304,9 +297,15 @@ pub mod core {
                 while let Some(render::Primitive { id, kind, scizzor, rect }) = primitives.next() {
                     match kind {
                         render::PrimitiveKind::Rectangle { color } => {
+                            use std::iter::once;
 
+                            let color = color.to_fsa();
                             let (l, b, w, h) = rect.l_b_w_h();
                             let lbwh = [l, b, w, h];
+                            let v1 = once(Vertex::new([-0.5, -0.5], [-0.5, -0.5], color));
+                            let v2 = once(Vertex::new([0.5, -0.5], [0.5, -0.5], color));
+                            let v3 = once(Vertex::new([-0.5, 0.5], [-0.5, 0.5], color));
+                            let v4 = once(Vertex::new([0.5, 0.5], [0.5, 0.5], color));
 
                         }
                         render::PrimitiveKind::Polygon { color, points } => {}
@@ -403,7 +402,7 @@ pub mod core {
                 //    factory.create_vertex_buffer_with_slice(&teapot.vertices, ());
                 // encoder.draw(&tpslice, &pso, &tpbuf);
 
-                // terrain.render(&mut encoder, cam.get_view_proj().into());
+                terrain.render(&mut encoder, cam.get_view_proj().into());
                 encoder.draw(&slice, &pso, &data);
 
                 // Display the results
@@ -423,8 +422,7 @@ pub mod core {
                 }
                 cam.process_input(&event);
                 cam.update(&event);
-
-                // Close window if the escape key or the exit button is pressed
+ // Close window if the escape key or the exit button is pressed
                 match event {
                     glutin::Event::KeyboardInput(_, _, Some(glutin::VirtualKeyCode::Escape)) |
                     glutin::Event::Closed => break 'main,
