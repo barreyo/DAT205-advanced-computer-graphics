@@ -12,7 +12,6 @@ pub struct Camera {
     pitch: f32,
     yaw: f32,
     speed: f32,
-    rotation_speed: f32,
     rotate_speed: f32,
     projection: Perspective3<f32>,
     inv_proj_view: Matrix4<f32>,
@@ -41,8 +40,7 @@ impl Camera {
             pitch: 0.0,
             yaw: 0.0,
             speed: 0.1,
-            rotation_speed: 0.05,
-            rotate_speed: 0.005,
+            rotate_speed: 0.001,
             projection: Perspective3::new(ratio, fov, 0.01, 10000.0),
             inv_proj_view: na::zero(),
             proj_view: na::zero(),
@@ -55,7 +53,7 @@ impl Camera {
             moving_left: false,
             moving_right: false,
 
-            moving_rotating: true,
+            moving_rotating: false,
         }
     }
 
@@ -138,16 +136,16 @@ impl Camera {
         let mut mvm = na::zero::<Vector3<f32>>();
 
         if self.moving_left {
-            mvm = mvm + vright
-        }
-        if self.moving_right {
             mvm = mvm - vright
         }
+        if self.moving_right {
+            mvm = mvm + vright
+        }
         if self.moving_forward {
-            mvm = mvm + vforward
+            mvm = mvm - vforward
         }
         if self.moving_backward {
-            mvm = mvm - vforward
+            mvm = mvm + vforward
         }
 
         if let Some(normalized) = mvm.try_normalize(1.0e-10) {

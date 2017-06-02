@@ -1,10 +1,17 @@
 
 use conrod;
-use glutin;
-use glutin::Event;
+use conrod::Color;
+use conrod::render::Text;
+use conrod::text::rt;
+use conrod::text;
 use gfx;
 
+use gfx::texture;
+use gfx::traits::FactoryExt;
+
 pub type ColorFormat = gfx::format::Srgba8;
+type SurfaceFormat = gfx::format::R8_G8_B8_A8;
+type FullFormat = (SurfaceFormat, gfx::format::Unorm);
 
 const FRAGMENT_SHADER: &'static [u8] = b"
         #version 140
@@ -132,17 +139,24 @@ fn update_texture<R, C>(encoder: &mut gfx::Encoder<R, C>,
     encoder.update_texture::<SurfaceFormat, FullFormat>(texture, None, info, data).unwrap();
 }
 
-pub struct TextRenderer<R: gfx::Resource> {
-    pso: gfx::PipelineState<R, text::Meta>,
-    data: text::Data<R>,
-    slice: gfx::Slice<R>,
+pub struct TextRenderer<R: gfx::Resources> {
+    pso: gfx::PipelineState<R, pipe::Meta>,
+    data: pipe::Data<R>,
+    glyph_cache: conrod::text::GlyphCache,
+    texture: gfx::handle::Texture<R, SurfaceFormat>,
+    texture_view: gfx::handle::ShaderResourceView<R, [f32; 4]>,
+    vertices: Vec<TextVertex>,
+    dpi: f32,
+    screen_width: f32,
+    screen_height: f32,
 }
 
-impl<R: gfx::Resources> Terrain<R> {
+impl<R: gfx::Resources> TextRenderer<R> {
     pub fn new<F: gfx::Factory<R>>(window_width: f32,
                                    window_height: f32,
-                                   dpi: conrod::Scalar,
-                                   main_color: gfx::handle::RenderTargetView<R, ColorFormat>)
+                                   dpi: f32,
+                                   main_color: gfx::handle::RenderTargetView<R, ColorFormat>,
+                                   factory: &mut F)
                                    -> Self {
 
         // Create texture sampler
@@ -152,9 +166,9 @@ impl<R: gfx::Resources> Terrain<R> {
 
         // Dummy values for initialization
         let vbuf = factory.create_vertex_buffer(&[]);
-        let (_, fake_texture) = create_texture(&mut factory, 2, 2, &[0; 4]);
+        let (_, fake_texture) = create_texture(factory, 2, 2, &[0; 4]);
 
-        let mut data = pipe::Data {
+        let data = pipe::Data {
             vbuf: vbuf,
             color: (fake_texture.clone(), sampler),
             out: main_color.clone(),
@@ -165,7 +179,7 @@ impl<R: gfx::Resources> Terrain<R> {
             .unwrap();
 
         // Create glyph cache and its texture
-        let (mut glyph_cache, cache_tex, cache_tex_view) = {
+        let (glyph_cache, cache_tex, cache_tex_view) = {
             let width = (window_width * dpi) as u32;
             let height = (window_height * dpi) as u32;
 
@@ -177,24 +191,110 @@ impl<R: gfx::Resources> Terrain<R> {
 
             let data = vec![0; (width * height * 4) as usize];
 
-            let (texture, texture_view) = create_texture(&mut factory, width, height, &data);
+            let (texture, texture_view) = create_texture(factory, width, height, &data);
 
             (cache, texture, texture_view)
         };
 
-        let mut console = ui::console::Console::new(publisher.clone(), console_sub);
-        let debug_info = ui::debug_info::DebugInfo::new();
-
         TextRenderer {
             pso: pso,
-            data: text::Data {},
-            slice: slice,
+            data: data,
+            glyph_cache: glyph_cache,
+            texture: cache_tex,
+            texture_view: cache_tex_view,
+            vertices: Vec::new(),
+            dpi: dpi,
+            screen_width: window_width,
+            screen_height: window_height,
         }
     }
 
-    pub fn render<C: gfx::CommandBuffer<R>>(&mut self, encoder: &mut gfx::Encoder<R, C>) {
+    pub fn prepare_frame(&mut self, dpi: f32, screen_width: f32, screen_height: f32) {
+        self.vertices = Vec::new();
+        self.dpi = dpi;
+        self.screen_height = screen_width * dpi;
+        self.screen_width = screen_height * dpi;
+    }
 
+    pub fn add_text<C: gfx::CommandBuffer<R>>(&mut self,
+                                              color: Color,
+                                              text: Text,
+                                              font_id: text::font::Id,
+                                              encoder: &mut gfx::Encoder<R, C>) {
 
-        // do stuff
+        let positioned_glyphs = text.positioned_glyphs(self.dpi);
+
+        // Queue the glyphs to be cached
+        for glyph in positioned_glyphs {
+            self.glyph_cache.queue_glyph(font_id.index(), glyph.clone());
+        }
+
+        let texture = &self.texture;
+        self.glyph_cache
+            .cache_queued(|rect, data| {
+                let offset = [rect.min.x as u16, rect.min.y as u16];
+                let size = [rect.width() as u16, rect.height() as u16];
+
+                let new_data = data.iter().map(|x| [0, 0, 0, *x]).collect::<Vec<_>>();
+
+                update_texture(encoder, texture, offset, size, &new_data);
+            })
+            .unwrap();
+
+        let color = color.to_fsa();
+        let cache_id = font_id.index();
+        let origin = rt::point(0.0, 0.0);
+
+        let sw = self.screen_width;
+        let sh = self.screen_height;
+
+        // A closure to convert RustType rects to GL rects
+        let to_gl_rect = |screen_rect: rt::Rect<i32>| {
+            rt::Rect {
+                min: origin +
+                     (rt::vector(screen_rect.min.x as f32 / sw - 0.5,
+                                 1.0 - screen_rect.min.y as f32 / sh - 0.5)) *
+                     2.0,
+                max: origin +
+                     (rt::vector(screen_rect.max.x as f32 / sw - 0.5,
+                                 1.0 - screen_rect.max.y as f32 / sh - 0.5)) *
+                     2.0,
+            }
+        };
+
+        let ref gc = self.glyph_cache;
+        // Create new vertices
+        let extension = positioned_glyphs.into_iter()
+            .filter_map(|g| gc.rect_for(cache_id, g).ok().unwrap_or(None))
+            .flat_map(|(uv_rect, screen_rect)| {
+                use std::iter::once;
+
+                let gl_rect = to_gl_rect(screen_rect);
+                let v = |pos, uv| once(TextVertex::new(pos, uv, color));
+
+                v([gl_rect.min.x, gl_rect.max.y],
+                  [uv_rect.min.x, uv_rect.max.y])
+                    .chain(v([gl_rect.min.x, gl_rect.min.y],
+                             [uv_rect.min.x, uv_rect.min.y]))
+                    .chain(v([gl_rect.max.x, gl_rect.min.y],
+                             [uv_rect.max.x, uv_rect.min.y]))
+                    .chain(v([gl_rect.max.x, gl_rect.min.y],
+                             [uv_rect.max.x, uv_rect.min.y]))
+                    .chain(v([gl_rect.max.x, gl_rect.max.y],
+                             [uv_rect.max.x, uv_rect.max.y]))
+                    .chain(v([gl_rect.min.x, gl_rect.max.y],
+                             [uv_rect.min.x, uv_rect.max.y]))
+            });
+
+        self.vertices.extend(extension);
+    }
+
+    pub fn render<C: gfx::CommandBuffer<R>, F: gfx::Factory<R>>(&mut self,
+                                                                encoder: &mut gfx::Encoder<R, C>,
+                                                                factory: &mut F) {
+        self.data.color.0 = self.texture_view.clone();
+        let (vbuf, slice) = factory.create_vertex_buffer_with_slice(&self.vertices, ());
+        self.data.vbuf = vbuf;
+        encoder.draw(&slice, &self.pso, &self.data);
     }
 }

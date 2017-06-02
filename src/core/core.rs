@@ -233,27 +233,15 @@ pub mod core {
         let font_path = assets.join("fonts/noto_sans_regular.ttf");
         ui.fonts.insert_from_file(font_path).unwrap();
 
-        // Create glyph cache and its texture
-        let (mut glyph_cache, cache_tex, cache_tex_view) = {
-            let dpi = window.hidpi_factor();
-            let width = (DEFAULT_WINDOW_WIDTH as f32 * dpi) as u32;
-            let height = (DEFAULT_WINDOW_HEIGHT as f32 * dpi) as u32;
-
-            const SCALE_TOLERANCE: f32 = 0.1;
-            const POSITION_TOLERANCE: f32 = 0.1;
-
-            let cache =
-                conrod::text::GlyphCache::new(width, height, SCALE_TOLERANCE, POSITION_TOLERANCE);
-
-            let data = vec![0; (width * height * 4) as usize];
-
-            let (texture, texture_view) = create_texture(&mut factory, width, height, &data);
-
-            (cache, texture, texture_view)
-        };
-
         let mut console = ui::console::Console::new(publisher.clone(), console_sub);
         let debug_info = ui::debug_info::DebugInfo::new();
+
+        let dpi = window.hidpi_factor();
+        let mut text_render = ui::text::TextRenderer::new(DEFAULT_WINDOW_WIDTH as f32,
+                                                          DEFAULT_WINDOW_HEIGHT as f32,
+                                                          dpi,
+                                                          main_color.clone(),
+                                                          &mut factory);
 
         //let teapot_input = BufReader::new(File::open("/Users/barre/Desktop/DAT205-advanced-computer-graphics/assets/models/teapot.obj").unwrap());
         //let teapot: Obj = load_obj(teapot_input).unwrap();
@@ -269,6 +257,8 @@ pub mod core {
         let mut events = window.poll_events();
 
         'main: loop {
+
+            // Update FPS timer
             frame_time.tick();
 
             {
@@ -292,149 +282,40 @@ pub mod core {
 
             let dpi_factor = window.hidpi_factor();
 
-            if let Some(mut primitives) = ui.draw_if_changed() {
+            {
+                let mut primitives = ui.draw();
+
                 let (screen_width, screen_height) = (win_w as f32 * dpi_factor,
                                                      win_h as f32 * dpi_factor);
-                let mut vertices = Vec::new();
+
+                text_render.prepare_frame(dpi_factor, win_w as f32, win_h as f32);
 
                 // Create vertices
                 while let Some(render::Primitive { id, kind, scizzor, rect }) = primitives.next() {
                     match kind {
-                        render::PrimitiveKind::Rectangle { color } => {
-                            use std::iter::once;
-
-                            let color = color.to_fsa();
-                            let (l, b, w, h) = rect.l_b_w_h();
-                            let lbwh = [l, b, w, h];
-                            let ui_rect = Plane::new();
-                            
-                            let to_gl_rect = |screen_rect: rt::Rect<i32>| {
-                                rt::Rect {
-                                    min: origin +
-                                         (rt::vector(screen_rect.min.x as f32 / screen_width -
-                                                     0.5,
-                                                     1.0 -
-                                                     screen_rect.min.y as f32 / screen_height -
-                                                     0.5)) *
-                                         2.0,
-                                    max: origin +
-                                         (rt::vector(screen_rect.max.x as f32 / screen_width -
-                                                     0.5,
-                                                     1.0 -
-                                                     screen_rect.max.y as f32 / screen_height -
-                                                     0.5)) *
-                                         2.0,
-                                }
-                            };
-
-                            let vertex_data: Vec<Vertex> = ui_rect.shared_vertex_iter()
-                                .map(|(x, y)| {
-                                   Vertex::new([x, y], [0, 0], color)
-                                })
-                            
-                        }
+                        render::PrimitiveKind::Rectangle { color } => {}
                         render::PrimitiveKind::Polygon { color, points } => {}
                         render::PrimitiveKind::Lines { color, cap, thickness, points } => {}
                         render::PrimitiveKind::Image { image_id, color, source_rect } => {}
                         render::PrimitiveKind::Text { color, text, font_id } => {
-                            let positioned_glyphs = text.positioned_glyphs(dpi_factor);
-
-                            // Queue the glyphs to be cached
-                            for glyph in positioned_glyphs {
-                                glyph_cache.queue_glyph(font_id.index(), glyph.clone());
-                            }
-
-                            glyph_cache.cache_queued(|rect, data| {
-                                    let offset = [rect.min.x as u16, rect.min.y as u16];
-                                    let size = [rect.width() as u16, rect.height() as u16];
-
-                                    let new_data =
-                                        data.iter().map(|x| [0, 0, 0, *x]).collect::<Vec<_>>();
-
-                                    update_texture(&mut encoder,
-                                                   &cache_tex,
-                                                   offset,
-                                                   size,
-                                                   &new_data);
-                                })
-                                .unwrap();
-
-                            let color = color.to_fsa();
-                            let cache_id = font_id.index();
-                            let origin = rt::point(0.0, 0.0);
-
-                            // A closure to convert RustType rects to GL rects
-                            let to_gl_rect = |screen_rect: rt::Rect<i32>| {
-                                rt::Rect {
-                                    min: origin +
-                                         (rt::vector(screen_rect.min.x as f32 / screen_width -
-                                                     0.5,
-                                                     1.0 -
-                                                     screen_rect.min.y as f32 / screen_height -
-                                                     0.5)) *
-                                         2.0,
-                                    max: origin +
-                                         (rt::vector(screen_rect.max.x as f32 / screen_width -
-                                                     0.5,
-                                                     1.0 -
-                                                     screen_rect.max.y as f32 / screen_height -
-                                                     0.5)) *
-                                         2.0,
-                                }
-                            };
-
-                            // Create new vertices
-                            let extension = positioned_glyphs.into_iter()
-                                .filter_map(|g| {
-                                    glyph_cache.rect_for(cache_id, g).ok().unwrap_or(None)
-                                })
-                                .flat_map(|(uv_rect, screen_rect)| {
-                                    use std::iter::once;
-
-                                    let gl_rect = to_gl_rect(screen_rect);
-                                    let v = |pos, uv| once(Vertex::new(pos, uv, color));
-
-                                    v([gl_rect.min.x, gl_rect.max.y],
-                                      [uv_rect.min.x, uv_rect.max.y])
-                                        .chain(v([gl_rect.min.x, gl_rect.min.y],
-                                                 [uv_rect.min.x, uv_rect.min.y]))
-                                        .chain(v([gl_rect.max.x, gl_rect.min.y],
-                                                 [uv_rect.max.x, uv_rect.min.y]))
-                                        .chain(v([gl_rect.max.x, gl_rect.min.y],
-                                                 [uv_rect.max.x, uv_rect.min.y]))
-                                        .chain(v([gl_rect.max.x, gl_rect.max.y],
-                                                 [uv_rect.max.x, uv_rect.max.y]))
-                                        .chain(v([gl_rect.min.x, gl_rect.max.y],
-                                                 [uv_rect.min.x, uv_rect.max.y]))
-                                });
-
-                            vertices.extend(extension);
+                            text_render.add_text(color, text, font_id, &mut encoder);
                         }
                         render::PrimitiveKind::Other(_) => {}
                     }
                 }
-
-                // Clear the window
-                encoder.clear_depth(&main_depth, 1.0);
-                encoder.clear(&main_color, CLEAR_COLOR);
-
-                // Draw the vertices
-                data.color.0 = cache_tex_view.clone();
-                let (vbuf, slice) = factory.create_vertex_buffer_with_slice(&vertices, ());
-                data.vbuf = vbuf;
-
-                // let (tpbuf, tpslice) =
-                //    factory.create_vertex_buffer_with_slice(&teapot.vertices, ());
-                // encoder.draw(&tpslice, &pso, &tpbuf);
-
-                terrain.render(&mut encoder, cam.get_view_proj().into());
-                encoder.draw(&slice, &pso, &data);
-
-                // Display the results
-                encoder.flush(&mut device);
-                window.swap_buffers().unwrap();
-                device.cleanup();
             }
+
+            // Clear the window
+            encoder.clear_depth(&main_depth, 1.0);
+            encoder.clear(&main_color, CLEAR_COLOR);
+
+            terrain.render(&mut encoder, cam.get_view_proj().into());
+            text_render.render(&mut encoder, &mut factory);
+
+            // Display the results
+            encoder.flush(&mut device);
+            window.swap_buffers().unwrap();
+            device.cleanup();
 
             if let Some(event) = events.next() {
                 let (w, h) = (win_w as conrod::Scalar, win_h as conrod::Scalar);

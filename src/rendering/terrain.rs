@@ -100,9 +100,9 @@ impl<R: gfx::Resources> Terrain<R> {
 
         let vertex_data: Vec<TerrainVertex> = plane.shared_vertex_iter()
             .map(|(x, y)| {
-                let h = perlin2(&rand_seed, &[x, y]) * 8.0;
+                let h = perlin2(&rand_seed, &[x, y]) * 14.0;
                 TerrainVertex {
-                    pos: [100.0 * x, 100.0 * y, h],
+                    pos: [60.0 * x, 60.0 * y, h],
                     color: get_terrain_color(h),
                 }
             })
