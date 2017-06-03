@@ -15,10 +15,12 @@ type FullFormat = (SurfaceFormat, gfx::format::Unorm);
 
 const FRAGMENT_SHADER: &'static [u8] = b"
         #version 140
+
         uniform sampler2D t_Color;
         in vec2 v_Uv;
         in vec4 v_Color;
         out vec4 f_Color;
+
         void main() {
             vec4 tex = texture(t_Color, v_Uv);
             f_Color = v_Color * tex;
@@ -27,11 +29,14 @@ const FRAGMENT_SHADER: &'static [u8] = b"
 
 const VERTEX_SHADER: &'static [u8] = b"
         #version 140
+
         in vec2 a_Pos;
         in vec2 a_Uv;
         in vec4 a_Color;
+
         out vec2 v_Uv;
         out vec4 v_Color;
+        
         void main() {
             v_Uv = a_Uv;
             v_Color = a_Color;
@@ -212,8 +217,8 @@ impl<R: gfx::Resources> TextRenderer<R> {
     pub fn prepare_frame(&mut self, dpi: f32, screen_width: f32, screen_height: f32) {
         self.vertices = Vec::new();
         self.dpi = dpi;
-        self.screen_height = screen_width * dpi;
-        self.screen_width = screen_height * dpi;
+        self.screen_height = screen_height * dpi;
+        self.screen_width = screen_width * dpi;
     }
 
     pub fn add_text<C: gfx::CommandBuffer<R>>(&mut self,

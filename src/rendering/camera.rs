@@ -2,6 +2,7 @@
 use alewife;
 use core::event;
 use glutin;
+use std::f32::consts::PI;
 
 use na::{Point3, Vector2, Vector3, Matrix4, Isometry3, Perspective3, Translation3};
 use na;
@@ -39,8 +40,8 @@ impl Camera {
             eye: Point3::new(0.0, 0.0, 0.0),
             pitch: 0.0,
             yaw: 0.0,
-            speed: 0.1,
-            rotate_speed: 0.001,
+            speed: 0.5,
+            rotate_speed: 0.005,
             projection: Perspective3::new(ratio, fov, 0.01, 10000.0),
             inv_proj_view: na::zero(),
             proj_view: na::zero(),
@@ -71,6 +72,7 @@ impl Camera {
 
     pub fn set_eye(&mut self, eye: Point3<f32>) {
         self.eye = eye;
+        self.update_restrictions();
         self.update_proj_view();
     }
 
@@ -124,6 +126,7 @@ impl Camera {
     fn handle_rotate(&mut self, delta: Vector2<f32>) {
         self.yaw = self.yaw + delta.x * self.rotate_speed;
         self.pitch = self.pitch + delta.y * self.rotate_speed;
+        self.update_restrictions();
         self.update_proj_view();
     }
 
@@ -152,6 +155,17 @@ impl Camera {
             normalized
         } else {
             mvm
+        }
+    }
+
+    fn update_restrictions(&mut self) {
+        if self.pitch <= 0.01 {
+            self.pitch = 0.01
+        }
+
+        let _pi: f32 = PI;
+        if self.pitch > _pi - 0.01 {
+            self.pitch = _pi - 0.01
         }
     }
 

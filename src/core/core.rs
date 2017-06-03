@@ -13,6 +13,9 @@ pub mod core {
     use conrod::text::rt;
     use na::Point3;
 
+    use rand::Rng;
+    use rand;
+
     use alewife;
     use find_folder;
 
@@ -20,144 +23,13 @@ pub mod core {
     use support;
     use ui;
     use rendering;
+    use rendering::colors;
 
     const DEFAULT_WINDOW_WIDTH: u32 = 1200;
     const DEFAULT_WINDOW_HEIGHT: u32 = 1000;
 
-    const CLEAR_COLOR: [f32; 4] = [0.1, 0.2, 0.3, 1.0];
-
-    const FRAGMENT_SHADER: &'static [u8] = b"
-        #version 140
-        uniform sampler2D t_Color;
-        in vec2 v_Uv;
-        in vec4 v_Color;
-        out vec4 f_Color;
-        void main() {
-            vec4 tex = texture(t_Color, v_Uv);
-            f_Color = v_Color * tex;
-        }
-    ";
-
-    const VERTEX_SHADER: &'static [u8] = b"
-        #version 140
-        in vec2 a_Pos;
-        in vec2 a_Uv;
-        in vec4 a_Color;
-        out vec2 v_Uv;
-        out vec4 v_Color;
-        void main() {
-            v_Uv = a_Uv;
-            v_Color = a_Color;
-            gl_Position = vec4(a_Pos, 0.0, 1.0);
-        }
-    ";
-
-    // Format definitions (must be pub for  gfx_defines to use them)
     pub type ColorFormat = gfx::format::Srgba8;
     type DepthFormat = gfx::format::DepthStencil;
-    type SurfaceFormat = gfx::format::R8_G8_B8_A8;
-    type FullFormat = (SurfaceFormat, gfx::format::Unorm);
-
-    // Vertex and pipeline declarations
-    gfx_defines! {
-        vertex Vertex {
-            pos: [f32; 2] = "a_Pos",
-            uv: [f32; 2] = "a_Uv",
-            color: [f32; 4] = "a_Color",
-        }
-
-        pipeline pipe {
-            vbuf: gfx::VertexBuffer<Vertex> = (),
-            color: gfx::TextureSampler<[f32; 4]> = "t_Color",
-            out: gfx::BlendTarget<ColorFormat> = ("f_Color", ::gfx::state::MASK_ALL, ::gfx::preset::blend::ALPHA),
-        }
-    }
-
-    // Convenience constructor
-    impl Vertex {
-        fn new(pos: [f32; 2], uv: [f32; 2], color: [f32; 4]) -> Vertex {
-            Vertex {
-                pos: pos,
-                uv: uv,
-                color: color,
-            }
-        }
-    }
-
-
-    // Creates a gfx texture with the given data
-    fn create_texture<F, R>
-        (factory: &mut F,
-         width: u32,
-         height: u32,
-         data: &[u8])
-         -> (gfx::handle::Texture<R, SurfaceFormat>, gfx::handle::ShaderResourceView<R, [f32; 4]>)
-        where R: gfx::Resources,
-              F: gfx::Factory<R>
-    {
-        // Modified `Factory::create_texture_immutable_u8` for dynamic texture.
-        fn create_texture<T, F, R>(factory: &mut F,
-                                   kind: gfx::texture::Kind,
-                                   data: &[&[u8]])
-                                   -> Result<(gfx::handle::Texture<R, T::Surface>,
-                                              gfx::handle::ShaderResourceView<R, T::View>),
-                                             gfx::CombinedError>
-            where F: gfx::Factory<R>,
-                  R: gfx::Resources,
-                  T: gfx::format::TextureFormat
-        {
-            use gfx::{format, texture};
-            use gfx::memory::{Usage, SHADER_RESOURCE};
-            use gfx_core::memory::Typed;
-
-            let surface = <T::Surface as format::SurfaceTyped>::get_surface_type();
-            let num_slices = kind.get_num_slices().unwrap_or(1) as usize;
-            let num_faces = if kind.is_cube() { 6 } else { 1 };
-            let desc = texture::Info {
-                kind: kind,
-                levels: (data.len() / (num_slices * num_faces)) as texture::Level,
-                format: surface,
-                bind: SHADER_RESOURCE,
-                usage: Usage::Dynamic,
-            };
-            let cty = <T::Channel as format::ChannelTyped>::get_channel_type();
-            let raw = try!(factory.create_texture_raw(desc, Some(cty), Some(data)));
-            let levels = (0, raw.get_info().levels - 1);
-            let tex = Typed::new(raw);
-            let view = try!(factory.view_texture_as_shader_resource::<T>(
-                &tex, levels, format::Swizzle::new()
-            ));
-            Ok((tex, view))
-        }
-
-        let kind = texture::Kind::D2(width as texture::Size,
-                                     height as texture::Size,
-                                     texture::AaMode::Single);
-        create_texture::<ColorFormat, F, R>(factory, kind, &[data]).unwrap()
-    }
-
-    // Updates a texture with the given data (used for updating the GlyphCache texture)
-    fn update_texture<R, C>(encoder: &mut gfx::Encoder<R, C>,
-                            texture: &gfx::handle::Texture<R, SurfaceFormat>,
-                            offset: [u16; 2],
-                            size: [u16; 2],
-                            data: &[[u8; 4]])
-        where R: gfx::Resources,
-              C: gfx::CommandBuffer<R>
-    {
-        let info = texture::ImageInfoCommon {
-            xoffset: offset[0],
-            yoffset: offset[1],
-            zoffset: 0,
-            width: size[0],
-            height: size[1],
-            depth: 0,
-            format: (),
-            mipmap: 0,
-        };
-
-        encoder.update_texture::<SurfaceFormat, FullFormat>(texture, None, info, data).unwrap();
-    }
 
     pub fn init() {
 
@@ -182,9 +54,9 @@ pub mod core {
         let mut cam = rendering::camera::Camera::new(1.7,
                                                      DEFAULT_WINDOW_HEIGHT as f32 /
                                                      DEFAULT_WINDOW_WIDTH as f32,
-                                                     Point3::new(0.0, -3.0, 0.0),
+                                                     Point3::new(0.0, 0.0, 0.0),
                                                      cam_sub);
-        cam.look_at(Point3::new(-1.0, -1.0, -1.0), Point3::new(0.0, 0.0, 0.0));
+        cam.look_at(Point3::new(0.0, 0.0, 0.0), Point3::new(0.0, -40.0, 0.0));
 
         let logger = support::logging::LogBuilder::new()
             .with_publisher(publisher.clone())
@@ -199,25 +71,6 @@ pub mod core {
         let (window, mut device, mut factory, main_color, mut main_depth) =
             gfx_window_glutin::init::<ColorFormat, DepthFormat>(builder);
         let mut encoder: gfx::Encoder<_, _> = factory.create_command_buffer().into();
-
-        // Create texture sampler
-        let sampler_info = texture::SamplerInfo::new(texture::FilterMethod::Bilinear,
-                                                     texture::WrapMode::Clamp);
-        let sampler = factory.create_sampler(sampler_info);
-
-        // Dummy values for initialization
-        let vbuf = factory.create_vertex_buffer(&[]);
-        let (_, fake_texture) = create_texture(&mut factory, 2, 2, &[0; 4]);
-
-        let mut data = pipe::Data {
-            vbuf: vbuf,
-            color: (fake_texture.clone(), sampler),
-            out: main_color.clone(),
-        };
-
-        // Compile GL program
-        let pso = factory.create_pipeline_simple(VERTEX_SHADER, FRAGMENT_SHADER, pipe::new())
-            .unwrap();
 
         // Create Ui and Ids of widgets to instantiate
         let mut ui = conrod::UiBuilder::new([DEFAULT_WINDOW_WIDTH as f64,
@@ -246,12 +99,21 @@ pub mod core {
         //let teapot_input = BufReader::new(File::open("/Users/barre/Desktop/DAT205-advanced-computer-graphics/assets/models/teapot.obj").unwrap());
         //let teapot: Obj = load_obj(teapot_input).unwrap();
 
-        let mut terrain = rendering::terrain::Terrain::new(1024 as usize,
+        let mut terrain = rendering::terrain::Terrain::new(512 as usize,
                                                            &mut factory,
                                                            main_color.clone(),
                                                            main_depth.clone());
 
+        let mut deferred_light_sys =
+            rendering::deferred::DeferredLightSystem::new(&mut factory,
+                                                          DEFAULT_WINDOW_WIDTH as u16,
+                                                          DEFAULT_WINDOW_HEIGHT as u16,
+                                                          main_color.clone());
+
         let mut frame_time = support::frame_clock::FrameClock::new();
+
+        // Create seed for terrain generation.
+        let rand_seed = rand::thread_rng().gen();
 
         // Event loop
         let mut events = window.poll_events();
@@ -307,9 +169,13 @@ pub mod core {
 
             // Clear the window
             encoder.clear_depth(&main_depth, 1.0);
-            encoder.clear(&main_color, CLEAR_COLOR);
+            encoder.clear(&main_color, colors::DARK_BLUE.into_with_a());
 
             terrain.render(&mut encoder, cam.get_view_proj().into());
+            deferred_light_sys.render(&rand_seed,
+                                      cam.get_eye(),
+                                      &mut encoder,
+                                      cam.get_view_proj().into());
             text_render.render(&mut encoder, &mut factory);
 
             // Display the results
@@ -334,7 +200,7 @@ pub mod core {
                     glutin::Event::KeyboardInput(_, _, Some(glutin::VirtualKeyCode::Escape)) |
                     glutin::Event::Closed => break 'main,
                     glutin::Event::Resized(_width, _height) => {
-                        gfx_window_glutin::update_views(&window, &mut data.out, &mut main_depth);
+                        // gfx_window_glutin::update_views(&window, &mut data.out, &mut main_depth);
                     }
 
                     _ => {}

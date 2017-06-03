@@ -4,10 +4,10 @@
 all: build run
 
 build:
-	@cargo build --release --features="winit glium"
+	@cargo build --release
 
 run:
-	@cargo run --release --features="winit glium"
+	@cargo run --release
 
 clean:
 	@cargo clean
