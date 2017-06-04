@@ -44,7 +44,6 @@ const VERTEX_SHADER: &'static [u8] = b"
         }
     ";
 
-// Vertex and pipeline declarations
 gfx_defines! {
     vertex TextVertex {
         pos: [f32; 2] = "a_Pos",
@@ -59,7 +58,6 @@ gfx_defines! {
     }
 }
 
-// Convenience constructor
 impl TextVertex {
     fn new(pos: [f32; 2], uv: [f32; 2], color: [f32; 4]) -> TextVertex {
         TextVertex {
@@ -70,7 +68,6 @@ impl TextVertex {
     }
 }
 
-// Creates a gfx texture with the given data
 fn create_texture<F, R>
     (factory: &mut F,
      width: u32,
@@ -80,7 +77,6 @@ fn create_texture<F, R>
     where R: gfx::Resources,
           F: gfx::Factory<R>
 {
-    // Modified `Factory::create_texture_immutable_u8` for dynamic texture.
     fn create_texture<T, F, R>(factory: &mut F,
                                kind: gfx::texture::Kind,
                                data: &[&[u8]])
@@ -121,7 +117,6 @@ fn create_texture<F, R>
     create_texture::<ColorFormat, F, R>(factory, kind, &[data]).unwrap()
 }
 
-// Updates a texture with the given data (used for updating the GlyphCache texture)
 fn update_texture<R, C>(encoder: &mut gfx::Encoder<R, C>,
                         texture: &gfx::handle::Texture<R, SurfaceFormat>,
                         offset: [u16; 2],

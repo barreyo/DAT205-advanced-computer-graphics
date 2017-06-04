@@ -17,6 +17,7 @@ pub struct Camera {
     projection: Perspective3<f32>,
     inv_proj_view: Matrix4<f32>,
     proj_view: Matrix4<f32>,
+    cur_mouse_pos: Vector2<f32>,
     prev_mouse_pos: Vector2<f32>,
 
     moving_up: bool,
@@ -40,11 +41,12 @@ impl Camera {
             eye: Point3::new(0.0, 0.0, 0.0),
             pitch: 0.0,
             yaw: 0.0,
-            speed: 0.5,
+            speed: 0.2,
             rotate_speed: 0.005,
             projection: Perspective3::new(ratio, fov, 0.01, 10000.0),
             inv_proj_view: na::zero(),
             proj_view: na::zero(),
+            cur_mouse_pos: na::zero(),
             prev_mouse_pos: na::zero(),
 
             moving_up: false,
@@ -169,7 +171,7 @@ impl Camera {
         }
     }
 
-    pub fn update(&mut self, event: &glutin::Event) {
+    pub fn update(&mut self) {
 
         let events: Vec<_> = self.event_queue.fetch();
 
@@ -180,18 +182,10 @@ impl Camera {
             }
         }
 
-        let mut cur_mouse_pos = self.prev_mouse_pos;
-        match event {
-            &glutin::Event::MouseMoved(x, y) => {
-                cur_mouse_pos = Vector2::new(x as f32, y as f32);
-            }
-            _ => {}
-        }
-
         if self.moving_rotating {
-            let mouse_delta = cur_mouse_pos - self.prev_mouse_pos;
+            let mouse_delta = self.cur_mouse_pos - self.prev_mouse_pos;
             self.handle_rotate(mouse_delta);
-            self.prev_mouse_pos = cur_mouse_pos;
+            self.prev_mouse_pos = self.cur_mouse_pos;
         }
 
         let mvm_dir = self.handle_input();
@@ -263,12 +257,15 @@ impl Camera {
                 self.moving_backward = false;
             }
             &glutin::Event::MouseInput(glutin::ElementState::Pressed,
-                                       glutin::MouseButton::Left) => {
+                                       glutin::MouseButton::Right) => {
                 self.moving_rotating = true;
             }
             &glutin::Event::MouseInput(glutin::ElementState::Released,
-                                       glutin::MouseButton::Left) => {
+                                       glutin::MouseButton::Right) => {
                 self.moving_rotating = false;
+            }
+            &glutin::Event::MouseMoved(x, y) => {
+                self.cur_mouse_pos = Vector2::new(x as f32, y as f32);
             }
             _ => {}
         }

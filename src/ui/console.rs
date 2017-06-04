@@ -40,6 +40,7 @@ lazy_static! {
         m.insert("reload", (event::EventID::RenderEvent, event::Event::ReloadShaders));
         m.insert("wireframe", (event::EventID::RenderEvent, event::Event::ToggleWireframe));
         m.insert("close", (event::EventID::UIEvent ,event::Event::ToggleConsole));
+        m.insert("toggleFXAA", (event::EventID::RenderEvent, event::Event::ToggleFXAA));
        // m.insert("moveCam", (event::EventID::EntityEvent, event::Event::MoveCamera(0f32, 0f32))):
         m
     };
@@ -151,6 +152,9 @@ impl Console {
                     self.add_entry("INFO: Toggle console visibility".to_owned(),
                                    ConsoleLogLevel::INFO);
                     self.toggle_visible();
+                }
+                (_, event::Event::ToggleFXAA) => {
+                    self.add_entry("INFO: Toggling FXAA.".to_owned(), ConsoleLogLevel::INFO);
                 }
                 (_, evt) => {
                     self.add_entry(format!("INFO: {:?}", evt), ConsoleLogLevel::INFO);

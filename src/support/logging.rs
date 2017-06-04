@@ -12,12 +12,12 @@ pub struct LogBuilder {
 
 impl LogBuilder {
     pub fn new() -> LogBuilder {
-        LogBuilder {
-            publisher: None,
-        }
+        LogBuilder { publisher: None }
     }
 
-    pub fn with_publisher(&mut self, p: alewife::Publisher<event::EventID, event::Event>) -> &mut Self {
+    pub fn with_publisher(&mut self,
+                          p: alewife::Publisher<event::EventID, event::Event>)
+                          -> &mut Self {
         self.publisher = Some(p);
         self
     }
@@ -31,9 +31,7 @@ impl LogBuilder {
     }
 
     pub fn build(&mut self) -> Logger {
-        Logger {
-            publisher: self.publisher.clone(),
-        }
+        Logger { publisher: self.publisher.clone() }
     }
 }
 
@@ -44,7 +42,6 @@ pub struct Logger {
 unsafe impl Sync for Logger {}
 
 impl log::Log for Logger {
-
     fn enabled(&self, metadata: &LogMetadata) -> bool {
         metadata.level() <= LogLevel::Info
     }
@@ -53,15 +50,28 @@ impl log::Log for Logger {
 
         use ui::console::ConsoleLogLevel;
 
-        if self.enabled(record.metadata()) {
+        if self.enabled(record.metadata()) && record.target() == "DAT205" {
             let s = format!("{}: {}", record.level(), record.args());
             println!("{}", s);
+
             if let Some(ref p) = self.publisher {
                 match record.level() {
-                    LogLevel::Error => p.publish(event::EventID::UIEvent, event::Event::ConsoleMessage(s, ConsoleLogLevel::ERROR)),
-                    LogLevel::Warn  => p.publish(event::EventID::UIEvent, event::Event::ConsoleMessage(s, ConsoleLogLevel::WARNING)),
-                    LogLevel::Info  => p.publish(event::EventID::UIEvent, event::Event::ConsoleMessage(s, ConsoleLogLevel::INFO)),
-                    _               => p.publish(event::EventID::UIEvent, event::Event::ConsoleMessage(s, ConsoleLogLevel::INFO))
+                    LogLevel::Error => {
+                        p.publish(event::EventID::UIEvent,
+                                  event::Event::ConsoleMessage(s, ConsoleLogLevel::ERROR))
+                    }
+                    LogLevel::Warn => {
+                        p.publish(event::EventID::UIEvent,
+                                  event::Event::ConsoleMessage(s, ConsoleLogLevel::WARNING))
+                    }
+                    LogLevel::Info => {
+                        p.publish(event::EventID::UIEvent,
+                                  event::Event::ConsoleMessage(s, ConsoleLogLevel::INFO))
+                    }
+                    _ => {
+                        p.publish(event::EventID::UIEvent,
+                                  event::Event::ConsoleMessage(s, ConsoleLogLevel::INFO))
+                    }
                 }
             }
         }

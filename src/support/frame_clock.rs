@@ -5,7 +5,7 @@ use std::time;
 pub struct FrameClock {
     clock: time::Instant,
     previous: u64,
-    elapsed: u64
+    elapsed: u64,
 }
 
 impl FrameClock {
@@ -13,7 +13,7 @@ impl FrameClock {
         FrameClock {
             clock: time::Instant::now(),
             previous: 0,
-            elapsed: u64::max_value()
+            elapsed: u64::max_value(),
         }
     }
 
@@ -22,6 +22,10 @@ impl FrameClock {
             return 0;
         }
         1_000 / self.elapsed
+    }
+
+    pub fn elapsed(&self) -> u64 {
+        self.get_duration()
     }
 
     pub fn get_last_frame_duration(&self) -> u64 {
@@ -46,6 +50,6 @@ mod tests {
     #[test]
     fn test_fps() {
         // TODO
-        assert!(1==1);
+        assert!(1 == 1);
     }
 }

@@ -18,6 +18,8 @@ pub enum Event {
     ToggleWireframe,
     // Clear color
     SetClearColor(f32, f32, f32),
+    // FXAA AA
+    ToggleFXAA,
 
     // * --- WindowEvent
     // Resize the window

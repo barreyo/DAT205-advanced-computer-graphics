@@ -56,7 +56,7 @@ pub mod core {
                                                      DEFAULT_WINDOW_WIDTH as f32,
                                                      Point3::new(0.0, 0.0, 0.0),
                                                      cam_sub);
-        cam.look_at(Point3::new(0.0, 0.0, 0.0), Point3::new(0.0, -40.0, 0.0));
+        cam.look_at(Point3::new(0.0, 0.0, 0.0), Point3::new(32.0, 32.0, 16.0));
 
         let logger = support::logging::LogBuilder::new()
             .with_publisher(publisher.clone())
@@ -89,6 +89,9 @@ pub mod core {
         let mut console = ui::console::Console::new(publisher.clone(), console_sub);
         let debug_info = ui::debug_info::DebugInfo::new();
 
+        // Create seed for terrain generation.
+        let rand_seed = rand::thread_rng().gen();
+
         let dpi = window.hidpi_factor();
         let mut text_render = ui::text::TextRenderer::new(DEFAULT_WINDOW_WIDTH as f32,
                                                           DEFAULT_WINDOW_HEIGHT as f32,
@@ -99,21 +102,20 @@ pub mod core {
         //let teapot_input = BufReader::new(File::open("/Users/barre/Desktop/DAT205-advanced-computer-graphics/assets/models/teapot.obj").unwrap());
         //let teapot: Obj = load_obj(teapot_input).unwrap();
 
-        let mut terrain = rendering::terrain::Terrain::new(512 as usize,
+        /*let mut terrain = rendering::terrain::Terrain::new(512 as usize,
                                                            &mut factory,
                                                            main_color.clone(),
                                                            main_depth.clone());
-
+*/
         let mut deferred_light_sys =
-            rendering::deferred::DeferredLightSystem::new(&mut factory,
+            rendering::deferred::DeferredLightSystem::new(renderer_sub,
+                                                          &mut factory,
                                                           DEFAULT_WINDOW_WIDTH as u16,
                                                           DEFAULT_WINDOW_HEIGHT as u16,
+                                                          &rand_seed,
                                                           main_color.clone());
 
         let mut frame_time = support::frame_clock::FrameClock::new();
-
-        // Create seed for terrain generation.
-        let rand_seed = rand::thread_rng().gen();
 
         // Event loop
         let mut events = window.poll_events();
@@ -123,6 +125,36 @@ pub mod core {
             // Update FPS timer
             frame_time.tick();
 
+            // If the window is closed, this will be None for one tick, so to avoid panicking with
+            // unwrap, instead break the loop
+            let (win_w, win_h) = match window.get_inner_size() {
+                Some(s) => s,
+                None => break 'main,
+            };
+
+            if let Some(event) = events.next() {
+                // Convert winit event to conrod event, requires conrod to be built with the `winit` feature
+                if let Some(event) = conrod::backend::winit::convert(event.clone(),
+                                                                     window.as_winit_window()) {
+                    ui.handle_event(event);
+                }
+                cam.process_input(&event);
+
+                // Close window if the escape key or the exit button is pressed
+                match event {
+                    glutin::Event::KeyboardInput(_, _, Some(glutin::VirtualKeyCode::Escape)) |
+                    glutin::Event::Closed => break 'main,
+                    glutin::Event::Resized(_width, _height) => {
+                        // gfx_window_glutin::update_views(&window, &mut data.out, &mut main_depth);
+                    }
+
+                    _ => {}
+                }
+            }
+
+            cam.update();
+
+            // Closure to update UI elements
             {
                 let ui = &mut ui.set_widgets();
 
@@ -134,13 +166,6 @@ pub mod core {
                 // TODO: Move this to a UIRenderable component and use ECS
                 console.update(ui, &console_ids);
             }
-
-            // If the window is closed, this will be None for one tick, so to avoid panicking with
-            // unwrap, instead break the loop
-            let (win_w, win_h) = match window.get_inner_size() {
-                Some(s) => s,
-                None => break 'main,
-            };
 
             let dpi_factor = window.hidpi_factor();
 
@@ -171,8 +196,9 @@ pub mod core {
             encoder.clear_depth(&main_depth, 1.0);
             encoder.clear(&main_color, colors::DARK_BLUE.into_with_a());
 
-            terrain.render(&mut encoder, cam.get_view_proj().into());
-            deferred_light_sys.render(&rand_seed,
+            //terrain.render(&mut encoder, cam.get_view_proj().into());
+            deferred_light_sys.render((frame_time.elapsed() as f32) / 1000.0,
+                                      &rand_seed,
                                       cam.get_eye(),
                                       &mut encoder,
                                       cam.get_view_proj().into());
@@ -182,30 +208,6 @@ pub mod core {
             encoder.flush(&mut device);
             window.swap_buffers().unwrap();
             device.cleanup();
-
-            if let Some(event) = events.next() {
-                let (w, h) = (win_w as conrod::Scalar, win_h as conrod::Scalar);
-                let dpi_factor = dpi_factor as conrod::Scalar;
-
-                // Convert winit event to conrod event, requires conrod to be built with the `winit` feature
-                if let Some(event) = conrod::backend::winit::convert(event.clone(),
-                                                                     window.as_winit_window()) {
-                    ui.handle_event(event);
-                }
-                cam.process_input(&event);
-                cam.update(&event);
-
-                // Close window if the escape key or the exit button is pressed
-                match event {
-                    glutin::Event::KeyboardInput(_, _, Some(glutin::VirtualKeyCode::Escape)) |
-                    glutin::Event::Closed => break 'main,
-                    glutin::Event::Resized(_width, _height) => {
-                        // gfx_window_glutin::update_views(&window, &mut data.out, &mut main_depth);
-                    }
-
-                    _ => {}
-                }
-            }
         }
     }
 }
