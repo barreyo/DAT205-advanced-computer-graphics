@@ -56,7 +56,7 @@ pub mod core {
                                                      DEFAULT_WINDOW_WIDTH as f32,
                                                      Point3::new(0.0, 0.0, 0.0),
                                                      cam_sub);
-        cam.look_at(Point3::new(0.0, 0.0, 0.0), Point3::new(32.0, 32.0, 16.0));
+        cam.look_at(Point3::new(0.0, 0.0, 0.0), Point3::new(100.0, 0.0, 20.0));
 
         let logger = support::logging::LogBuilder::new()
             .with_publisher(publisher.clone())
@@ -114,6 +114,7 @@ pub mod core {
                                                           DEFAULT_WINDOW_HEIGHT as u16,
                                                           &rand_seed,
                                                           main_color.clone());
+        //let mut skybox = rendering::skybox::Skybox::new(&mut factory, main_color.clone());
 
         let mut frame_time = support::frame_clock::FrameClock::new();
 
@@ -196,12 +197,10 @@ pub mod core {
             encoder.clear_depth(&main_depth, 1.0);
             encoder.clear(&main_color, colors::DARK_BLUE.into_with_a());
 
-            //terrain.render(&mut encoder, cam.get_view_proj().into());
             deferred_light_sys.render((frame_time.elapsed() as f32) / 1000.0,
                                       &rand_seed,
-                                      cam.get_eye(),
                                       &mut encoder,
-                                      cam.get_view_proj().into());
+                                      &cam);
             text_render.render(&mut encoder, &mut factory);
 
             // Display the results

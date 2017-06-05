@@ -72,6 +72,14 @@ impl Camera {
         self.eye
     }
 
+    pub fn get_view_matrix(&self) -> Matrix4<f32> {
+        self.view_transform().to_homogeneous()
+    }
+
+    pub fn get_proj_matrix(&self) -> Matrix4<f32> {
+        *self.projection.as_matrix()
+    }
+
     pub fn set_eye(&mut self, eye: Point3<f32>) {
         self.eye = eye;
         self.update_restrictions();

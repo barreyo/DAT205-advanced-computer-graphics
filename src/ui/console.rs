@@ -41,6 +41,12 @@ lazy_static! {
         m.insert("wireframe", (event::EventID::RenderEvent, event::Event::ToggleWireframe));
         m.insert("close", (event::EventID::UIEvent ,event::Event::ToggleConsole));
         m.insert("toggleFXAA", (event::EventID::RenderEvent, event::Event::ToggleFXAA));
+        m.insert("debug_ShowLightBuffer", (event::EventID::RenderEvent, event::Event::DebugShowLightBuffer));
+        m.insert("debug_ShowNormalBuffer", (event::EventID::RenderEvent, event::Event::DebugShowNormalBuffer));
+        m.insert("debug_ShowDiffuseBuffer", (event::EventID::RenderEvent, event::Event::DebugShowDiffuseBuffer));
+        m.insert("debug_ShowDepthBuffer", (event::EventID::RenderEvent, event::Event::DebugShowDepthBuffer));
+        m.insert("debug_Off", (event::EventID::RenderEvent, event::Event::DebugOff));
+       
        // m.insert("moveCam", (event::EventID::EntityEvent, event::Event::MoveCamera(0f32, 0f32))):
         m
     };
@@ -210,6 +216,7 @@ impl Console {
         for edit in TextBox::new(title.as_str())
             .w_h(self.window_w, 30.0)
             .font_size(12)
+            .color(conrod::color::WHITE)
             .down_from(ids.bg, 1.0)
             .set(ids.input, ui) {
             match edit {

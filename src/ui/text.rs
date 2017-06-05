@@ -23,7 +23,7 @@ const FRAGMENT_SHADER: &'static [u8] = b"
 
         void main() {
             vec4 tex = texture(t_Color, v_Uv);
-            f_Color = v_Color * tex;
+            f_Color = vec4(v_Color.rgb, tex.a);
         }
     ";
 
@@ -139,6 +139,19 @@ fn update_texture<R, C>(encoder: &mut gfx::Encoder<R, C>,
     encoder.update_texture::<SurfaceFormat, FullFormat>(texture, None, info, data).unwrap();
 }
 
+fn gamma_srgb_to_linear(c: [f32; 4]) -> [f32; 4] {
+    fn component(f: f32) -> f32 {
+        // Taken from https://github.com/PistonDevelopers/graphics/src/color.rs#L42
+        if f <= 0.04045 {
+            f / 12.92
+        } else {
+            ((f + 0.055) / 1.055).powf(2.4)
+        }
+    }
+    [component(c[0]), component(c[1]), component(c[2]), c[3]]
+}
+
+
 pub struct TextRenderer<R: gfx::Resources> {
     pso: gfx::PipelineState<R, pipe::Meta>,
     data: pipe::Data<R>,
@@ -241,7 +254,7 @@ impl<R: gfx::Resources> TextRenderer<R> {
             })
             .unwrap();
 
-        let color = color.to_fsa();
+        let color = gamma_srgb_to_linear(color.to_fsa());
         let cache_id = font_id.index();
         let origin = rt::point(0.0, 0.0);
 

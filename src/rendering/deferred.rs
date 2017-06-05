@@ -381,15 +381,15 @@ impl gfx::format::Formatted for DepthFormat {
     }
 }
 
-fn calculate_normal(seed: &noise::PermutationTable, x: f32, y: f32) -> [f32; 3] {
+fn calculate_normal(seed: &noise::PermutationTable, x: f32, z: f32) -> [f32; 3] {
 
     let sample_distance = 0.001;
     let s_x0 = x - sample_distance;
     let s_x1 = x + sample_distance;
-    let s_y0 = y - sample_distance;
-    let s_y1 = y + sample_distance;
+    let s_y0 = z - sample_distance;
+    let s_y1 = z + sample_distance;
 
-    let dzdx = (perlin2(seed, &[s_x1, y]) - perlin2(seed, &[s_x0, y])) / (s_x1 - s_x0);
+    let dzdx = (perlin2(seed, &[s_x1, z]) - perlin2(seed, &[s_x0, z])) / (s_x1 - s_x0);
     let dzdy = (perlin2(seed, &[x, s_y1]) - perlin2(seed, &[x, s_y0])) / (s_y1 - s_y0);
 
     // Cross gradient vectors to get normal
@@ -416,6 +416,7 @@ pub struct DeferredLightSystem<R: gfx::Resources> {
     event_queue: alewife::Subscriber<event::EventID, event::Event>,
     fxaa_enabled: bool,
     terrain: Bundle<R, terrain::Data<R>>,
+    skybox: rendering::skybox::Skybox<R>,
     blit: Bundle<R, blit::Data<R>>,
     fxaa: Bundle<R, fxaa::Data<R>>,
     light: Bundle<R, light::Data<R>>,
@@ -448,6 +449,7 @@ fn create_g_buffer<R: gfx::Resources, F: gfx::Factory<R>>(target_width: texture:
             target: rtv,
         }
     };
+
     let normal = {
         let (_, srv, rtv) = factory.create_render_target(target_width, target_height)
             .unwrap();
@@ -456,6 +458,7 @@ fn create_g_buffer<R: gfx::Resources, F: gfx::Factory<R>>(target_width: texture:
             target: rtv,
         }
     };
+
     let diffuse = {
         let (_, srv, rtv) = factory.create_render_target(target_width, target_height)
             .unwrap();
@@ -464,6 +467,7 @@ fn create_g_buffer<R: gfx::Resources, F: gfx::Factory<R>>(target_width: texture:
             target: rtv,
         }
     };
+
     let (tex, _srv, depth_rtv) = factory.create_depth_stencil(target_width, target_height)
         .unwrap();
     let swizzle = gfx::format::Swizzle(ChannelSource::X,
@@ -486,6 +490,8 @@ impl<R: gfx::Resources> DeferredLightSystem<R> {
                                    -> Self {
         use gfx::traits::FactoryExt;
 
+        info!(target: "DAT205", "Loading lighting system...");
+
         let (gpos, gnormal, gdiffuse, depth_resource, depth_target) =
             create_g_buffer(target_width, target_height, factory);
 
@@ -503,12 +509,12 @@ impl<R: gfx::Resources> DeferredLightSystem<R> {
         let terrain = {
             let plane = Plane::subdivide(256, 256);
             let vertex_data: Vec<TerrainVertex> = plane.shared_vertex_iter()
-                .map(|(x, y)| {
-                    let h = TERRAIN_SCALE[2] * perlin2(seed, &[x, y]);
+                .map(|(x, z)| {
+                    let y = TERRAIN_SCALE[2] * perlin2(seed, &[x, z]);
                     TerrainVertex {
-                        pos: [TERRAIN_SCALE[0] * x, TERRAIN_SCALE[1] * y, h],
-                        normal: calculate_normal(seed, x, y),
-                        color: calculate_color(h),
+                        pos: [TERRAIN_SCALE[0] * x, y, TERRAIN_SCALE[1] * z],
+                        normal: calculate_normal(seed, x, z),
+                        color: calculate_color(y),
                     }
                 })
                 .collect();
@@ -538,6 +544,8 @@ impl<R: gfx::Resources> DeferredLightSystem<R> {
 
             Bundle::new(slice, pso, data)
         };
+
+        let skybox = rendering::skybox::Skybox::new(factory, terrain.data.out_color.clone());
 
         let blit = {
             let vertex_data = [BlitVertex { pos_tex: [-3, -1, -1, 0] },
@@ -584,7 +592,20 @@ impl<R: gfx::Resources> DeferredLightSystem<R> {
 
         let light_pos_buffer = factory.create_constant_buffer(NUMBER_OF_LIGHTS as usize);
 
+        // TODO: SPHERES
         let (light_vbuf, mut light_slice) = {
+
+            /* let sphere = SphereUV::new(10, 10);
+            let vertex_data: Vec<CubeVertex> = sphere.shared_vertex_iter()
+                .map(|(x, y, z)| CubeVertex { pos: [x as i8, y as i8, z as i8, 1] })
+                .collect();
+
+            let index_data: Vec<u32> = sphere.indexed_polygon_iter()
+                .triangulate()
+                .vertices()
+                .map(|i| i as u32)
+                .collect();
+*/
             let vertex_data = [// top (0, 0, 1)
                                CubeVertex { pos: [-1, -1, 1, 1] },
                                CubeVertex { pos: [1, -1, 1, 1] },
@@ -669,9 +690,12 @@ impl<R: gfx::Resources> DeferredLightSystem<R> {
             Bundle::new(light_slice, pso, data)
         };
 
+        info!(target: "DAT205", "Done!");
+
         DeferredLightSystem {
             event_queue: e_que,
             fxaa_enabled: true,
+            skybox: skybox,
             terrain: terrain,
             blit: blit,
             fxaa: fxaa,
@@ -690,9 +714,8 @@ impl<R: gfx::Resources> DeferredLightSystem<R> {
     pub fn render<C: gfx::CommandBuffer<R>>(&mut self,
                                             time: f32,
                                             seed: &noise::PermutationTable,
-                                            cam_pos: Point3<f32>,
                                             encoder: &mut gfx::Encoder<R, C>,
-                                            view_proj: [[f32; 4]; 4]) {
+                                            cam: &rendering::camera::Camera) {
 
         let events: Vec<_> = self.event_queue.fetch();
 
@@ -702,9 +725,32 @@ impl<R: gfx::Resources> DeferredLightSystem<R> {
                     self.fxaa_enabled = !self.fxaa_enabled;
                     info!(target: "DAT205", "FXAA state changed to {}", self.fxaa_enabled);
                 }
+                (_, event::Event::DebugShowLightBuffer) => {
+                    self.debug_buf = Some(self.light.data.tex_pos.0.clone());
+                    info!(target: "DAT205", "Showing light buffer only");
+                }
+                (_, event::Event::DebugShowNormalBuffer) => {
+                    self.debug_buf = Some(self.light.data.tex_normal.0.clone());
+                    info!(target: "DAT205", "Showing normal buffer only");
+                }
+                (_, event::Event::DebugShowDiffuseBuffer) => {
+                    self.debug_buf = Some(self.light.data.tex_diffuse.0.clone());
+                    info!(target: "DAT205", "Showing diffuse buffer only");
+                }
+                (_, event::Event::DebugShowDepthBuffer) => {
+                    self.debug_buf = Some(self.depth_resource.clone());
+                    info!(target: "DAT205", "Showing depth buffer only");
+                }
+                (_, event::Event::DebugOff) => {
+                    self.debug_buf = None;
+                    info!(target: "DAT205", "Debug turned off");
+                }
                 _ => {}
             }
         }
+
+        let cam_pos = cam.get_eye();
+        let view_proj: [[f32; 4]; 4] = cam.get_view_proj().into();
 
         let terrain_locals = TerrainLocals {
             model: Matrix4::identity().into(),
@@ -730,17 +776,16 @@ impl<R: gfx::Resources> DeferredLightSystem<R> {
 
         // Update light positions
         for (i, d) in self.light_pos.iter_mut().enumerate() {
-            let (x, y) = {
+            let (x, z) = {
                 let fi = i as f32;
-                // Distribute lights nicely
                 let r = 1.0 - (fi * fi) / ((NUMBER_OF_LIGHTS * NUMBER_OF_LIGHTS) as f32);
                 (r * (0.2 + i as f32).cos(), r * (0.2 + i as f32).sin())
             };
-            let h = perlin2(seed, &[x, y]);
+            let y = perlin2(seed, &[x, z]);
 
             d.pos[0] = TERRAIN_SCALE[0] * x;
-            d.pos[1] = TERRAIN_SCALE[1] * y;
-            d.pos[2] = TERRAIN_SCALE[2] * h + 5.0 * time.cos();
+            d.pos[1] = TERRAIN_SCALE[1] * y + 5.0 * time.cos() + 5.0;
+            d.pos[2] = TERRAIN_SCALE[2] * z;
         }
         encoder.update_buffer(&self.light.data.light_pos_buf, &self.light_pos, 0).unwrap();
 
@@ -749,15 +794,21 @@ impl<R: gfx::Resources> DeferredLightSystem<R> {
         encoder.clear(&self.terrain.data.out_normal, [0.0, 0.0, 0.0, 1.0]);
         encoder.clear(&self.terrain.data.out_color, [0.0, 0.0, 0.0, 1.0]);
 
+        if let Some(inv) = cam.get_proj_matrix().try_inverse() {
+            self.skybox.render(encoder, inv.into(), cam.get_view_matrix().into());
+        }
+
         self.terrain.encode(encoder);
 
         if self.fxaa_enabled {
             let fxaa_tex = match self.debug_buf {
-                Some(ref tex) => tex,   // Show one of the immediate buffers
+                Some(ref tex) => tex, 
                 None => {
                     encoder.clear(&self.intermediate.target, [0.0, 0.0, 0.0, 1.0]);
+
                     // Apply lights
                     self.light.encode(encoder);
+
                     // Draw light emitters
                     self.emitter.encode(encoder);
                     &self.intermediate.resource
@@ -768,11 +819,13 @@ impl<R: gfx::Resources> DeferredLightSystem<R> {
             self.fxaa.encode(encoder);
         } else {
             let blit_tex = match self.debug_buf {
-                Some(ref tex) => tex,   // Show one of the immediate buffers
+                Some(ref tex) => tex,  
                 None => {
                     encoder.clear(&self.intermediate.target, [0.0, 0.0, 0.0, 1.0]);
+
                     // Apply lights
                     self.light.encode(encoder);
+
                     // Draw light emitters
                     self.emitter.encode(encoder);
                     &self.intermediate.resource

@@ -24,6 +24,8 @@ extern crate nalgebra as na;
 
 extern crate alewife;
 
+extern crate image;
+
 mod core;
 // mod input;
 mod rendering;

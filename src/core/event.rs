@@ -20,6 +20,16 @@ pub enum Event {
     SetClearColor(f32, f32, f32),
     // FXAA AA
     ToggleFXAA,
+    // Show light buffer
+    DebugShowLightBuffer,
+    // Show normals only
+    DebugShowNormalBuffer,
+    // Show diffuse channel
+    DebugShowDiffuseBuffer,
+    // Show depth channel
+    DebugShowDepthBuffer,
+    // Turn all debug settings off
+    DebugOff,
 
     // * --- WindowEvent
     // Resize the window
